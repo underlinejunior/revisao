@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Revisão de Matemática - 6º Ano</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="topoDashboard" class="topo">
+    <div class="topo__conteudo">
+      <div class="topo__texto">
+        <span class="etiqueta">Matemática • 6º ano</span>
+        <h1>Revisão Interativa</h1>
+        <p>Escolha um tópico, acompanhe a pontuação por área e entre no modo de questões com uma tela limpa, focada e com progresso visível.</p>
+      </div>
+
+      <aside class="painel-resumo" aria-label="Resumo geral da pontuação">
+        <div>
+          <strong id="totalQuestoes">200</strong>
+          <span>questões</span>
+        </div>
+        <div>
+          <strong id="respondidasTopo">0</strong>
+          <span>respondidas</span>
+        </div>
+        <div>
+          <strong id="acertosTopo">0</strong>
+          <span>acertos</span>
+        </div>
+        <div>
+          <strong id="aproveitamentoTopo">0%</strong>
+          <span>aproveitamento</span>
+        </div>
+      </aside>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="telaDashboard" class="tela-dashboard" aria-label="Dashboard da revisão">
+      <section class="dashboard-card">
+        <div>
+          <span class="etiqueta etiqueta-suave">Painel inicial</span>
+          <h2>Comece pela revisão completa ou escolha uma área</h2>
+          <p>O aluno acompanha a pontuação atual, escolhe o tópico desejado e, ao iniciar, vê somente a questão, o contador e a barra de progresso.</p>
+        </div>
+        <div class="dashboard-acoes-rapidas">
+          <button id="btnIniciarRapido" class="btn btn-primario btn-grande">Começar agora</button>
+          <button id="btnVerRanking" class="btn btn-neutro btn-grande">Ver ranking</button>
+        </div>
+      </section>
+
+      <section class="controles" aria-label="Controles da revisão">
+        <div class="campo">
+          <label for="filtroTopico">Escolha um tópico</label>
+          <select id="filtroTopico">
+            <option value="todos">Todos os tópicos</option>
+          </select>
+        </div>
+
+        <div class="botoes-controle">
+          <button id="btnIniciar" class="btn btn-primario">Entrar nas questões</button>
+          <button id="btnResultado" class="btn btn-secundario">Ver resultado</button>
+          <button id="btnRefazerErros" class="btn btn-secundario">Refazer erros</button>
+          <button id="btnLimpar" class="btn btn-neutro">Limpar tentativa</button>
+        </div>
+      </section>
+
+      <section class="painel-pontuacao" aria-label="Pontuação atual por tópico">
+        <div class="painel-pontuacao__cabecalho">
+          <div>
+            <span class="etiqueta etiqueta-suave">Pontuação atual</span>
+            <h2>Desempenho por área</h2>
+          </div>
+          <p>Use estes cards para acompanhar onde o aluno está indo bem e onde precisa revisar.</p>
+        </div>
+        <div id="placarTopicos" class="placar-topicos"></div>
+      </section>
+
+      <section id="areaResultado" class="resultado oculto" aria-live="polite"></section>
+    </section>
+
+    <section id="telaQuestoes" class="tela-questoes oculto" aria-label="Modo de questões">
+      <div class="quiz-topo-fixo">
+        <div class="quiz-topo-linha">
+          <button id="btnVoltarDashboard" class="btn btn-neutro btn-voltar">← Dashboard</button>
+
+          <div class="quiz-identificacao">
+            <strong id="textoModoQuestao">Todos os tópicos</strong>
+            <span id="textoProgresso">Questão 1 de 200</span>
+          </div>
+
+          <div class="mini-placar" aria-label="Pontuação do modo atual">
+            <span><strong id="acertosModo">0</strong> acertos</span>
+            <span><strong id="errosModo">0</strong> erros</span>
+            <span><strong id="pendentesModo">0</strong> pendentes</span>
+          </div>
+        </div>
+
+        <div class="barra-progresso barra-progresso-quiz" aria-label="Progresso das questões">
+          <div class="barra-progresso__texto">
+            <span>Progresso</span>
+            <span id="percentualProgresso">0%</span>
+          </div>
+          <div class="barra-progresso__trilho">
+            <div id="barraProgresso" class="barra-progresso__preenchimento"></div>
+          </div>
+        </div>
+      </div>
+
+      <section id="areaQuestao" class="cartao-questao" aria-live="polite"></section>
+
+      <nav class="navegacao" aria-label="Navegação entre questões">
+        <button id="btnAnterior" class="btn btn-neutro">← Anterior</button>
+        <button id="btnResultadoQuestao" class="btn btn-secundario">Ver resultado</button>
+        <button id="btnProxima" class="btn btn-primario">Próxima →</button>
+      </nav>
+    </section>
+  </main>
+
+  <footer id="rodapeDashboard" class="rodape">
+    <p>Aplicação simples em HTML, CSS e JavaScript puro.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
