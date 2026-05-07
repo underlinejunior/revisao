@@ -1,894 +1,694 @@
-const TOPICOS = [
-  "Adição com números naturais",
-  "Subtração com números naturais",
-  "Multiplicação com números naturais",
-  "Divisão exata",
-  "Divisão com resto",
-  "Expressões numéricas",
-  "Problemas com mais de uma operação",
-  "Sólidos geométricos",
-  "Faces, arestas e vértices",
-  "Polígonos e perímetro"
-];
+const letras = ["A", "B", "C", "D", "E"];
 
-const letras = ["A", "B", "C", "D"];
-let bancoQuestoes = [];
-let respostas = JSON.parse(localStorage.getItem("respostasRevisao6Ano") || "{}");
-let idsAtuais = [];
-let indiceAtual = 0;
-let modoAtual = "todos";
+const estado = {
+  questoes: [],
+  indice: 0,
+  pontuacao: 0,
+  acertos: 0,
+  erros: 0,
+  travada: false,
+  respostas: [],
+  estatisticas: {}
+};
 
-function numero(valor) {
-  return Number(valor).toLocaleString("pt-BR");
-}
+const telaInicial = document.getElementById("telaInicial");
+const telaQuiz = document.getElementById("telaQuiz");
+const telaResultado = document.getElementById("telaResultado");
+const totalBanco = document.getElementById("totalBanco");
+const btnIniciar = document.getElementById("btnIniciar");
+const btnProxima = document.getElementById("btnProxima");
+const btnFinalizar = document.getElementById("btnFinalizar");
+const btnReiniciar = document.getElementById("btnReiniciar");
+const quantidadeSelect = document.getElementById("quantidade");
+const topicoAtual = document.getElementById("topicoAtual");
+const dificuldadeAtual = document.getElementById("dificuldadeAtual");
+const pontuacaoEl = document.getElementById("pontuacao");
+const acertosEl = document.getElementById("acertos");
+const errosEl = document.getElementById("erros");
+const barraProgresso = document.getElementById("barraProgresso");
+const contador = document.getElementById("contador");
+const enunciado = document.getElementById("enunciado");
+const alternativasEl = document.getElementById("alternativas");
+const feedback = document.getElementById("feedback");
+const resultadoGeral = document.getElementById("resultadoGeral");
+const resumoTopicos = document.getElementById("resumoTopicos");
+const listaErros = document.getElementById("listaErros");
 
-function salvarRespostas() {
-  localStorage.setItem("respostasRevisao6Ano", JSON.stringify(respostas));
-}
+const bancoCompleto = gerarQuestoes();
+totalBanco.textContent = bancoCompleto.length;
 
-function alternativasNumero(correta, unidade = "") {
-  const candidatos = [
-    correta,
-    correta + 1,
-    correta - 1,
-    correta + 10,
-    correta - 10,
-    correta + 100,
-    Math.max(0, correta - 100),
-    correta * 2,
-    Math.max(0, Math.floor(correta / 2))
-  ];
+btnIniciar.addEventListener("click", iniciarQuiz);
+btnProxima.addEventListener("click", proximaQuestao);
+btnFinalizar.addEventListener("click", mostrarResultado);
+btnReiniciar.addEventListener("click", () => location.reload());
 
-  const unicos = [];
-  for (const item of candidatos) {
-    if (item >= 0 && !unicos.includes(item)) unicos.push(item);
+function iniciarQuiz() {
+  const topicosMarcados = [...document.querySelectorAll(".filtro-topico:checked")].map(item => item.value);
+  if (topicosMarcados.length === 0) {
+    alert("Selecione pelo menos um assunto para iniciar o quiz.");
+    return;
   }
 
-  while (unicos.length < 4) {
-    const novo = correta + unicos.length * 7 + 3;
-    if (!unicos.includes(novo)) unicos.push(novo);
-  }
+  const quantidade = Number(quantidadeSelect.value);
+  const filtradas = bancoCompleto.filter(q => topicosMarcados.includes(q.topico));
 
-  return unicos.slice(0, 4).map((item) => `${numero(item)}${unidade}`);
-}
+  const organizadas = [1, 2, 3].flatMap(nivel => embaralhar(filtradas.filter(q => q.dificuldade === nivel)));
+  estado.questoes = organizadas.slice(0, Math.min(quantidade, organizadas.length));
+  estado.indice = 0;
+  estado.pontuacao = 0;
+  estado.acertos = 0;
+  estado.erros = 0;
+  estado.travada = false;
+  estado.respostas = [];
+  estado.estatisticas = {};
 
-function embaralharAlternativas(opcoes, correta) {
-  const lista = [...new Set(opcoes)].slice(0, 4);
-  while (lista.length < 4) lista.push(`Alternativa ${lista.length + 1}`);
-
-  for (let i = lista.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [lista[i], lista[j]] = [lista[j], lista[i]];
-  }
-
-  return {
-    opcoes: lista,
-    correta: lista.indexOf(correta)
-  };
-}
-
-function adicionarQuestao(topico, enunciado, respostaCorreta, explicacao, distratores = []) {
-  const id = bancoQuestoes.length + 1;
-  const corretaTexto = String(respostaCorreta);
-  const opcoesBase = [corretaTexto, ...distratores.map(String)];
-  const { opcoes, correta } = embaralharAlternativas(opcoesBase, corretaTexto);
-
-  bancoQuestoes.push({
-    id,
-    topico,
-    enunciado,
-    opcoes,
-    correta,
-    explicacao
-  });
-}
-
-function adicionarNumerica(topico, enunciado, correta, explicacao, unidade = "") {
-  const corretaTexto = `${numero(correta)}${unidade}`;
-  const opcoes = alternativasNumero(correta, unidade);
-  adicionarQuestao(topico, enunciado, corretaTexto, explicacao, opcoes.filter((opcao) => opcao !== corretaTexto));
-}
-
-function adicionarMultipla(topico, enunciado, correta, distratores, explicacao) {
-  adicionarQuestao(topico, enunciado, correta, explicacao, distratores);
-}
-
-function montarQuestoes() {
-  const T1 = TOPICOS[0];
-  const adicoes = [
-    [234, 125], [508, 341], [720, 189], [1245, 632], [2308, 1421],
-    [3450, 2675], [4809, 3126], [7560, 2934], [9875, 4325], [12450, 8320]
-  ];
-  adicoes.forEach(([a, b]) => {
-    const correta = a + b;
-    adicionarNumerica(T1, `Resolva: ${numero(a)} + ${numero(b)}`, correta, `Para resolver, somamos as parcelas: ${numero(a)} + ${numero(b)} = ${numero(correta)}.`);
-  });
-  adicionarNumerica(T1, "Uma escola recebeu 235 livros de Matemática e 178 livros de Português. Quantos livros recebeu ao todo?", 413, "A ideia é juntar as quantidades: 235 + 178 = 413.", " livros");
-  adicionarNumerica(T1, "Em uma campanha, foram arrecadados 450 kg de alimentos pela manhã e 375 kg à tarde. Quantos quilos foram arrecadados?", 825, "Somamos o que foi arrecadado nos dois períodos: 450 + 375 = 825.", " kg");
-  adicionarNumerica(T1, "João tinha 128 figurinhas e ganhou mais 76. Com quantas figurinhas ficou?", 204, "Como ele ganhou mais figurinhas, fazemos 128 + 76 = 204.", " figurinhas");
-  adicionarNumerica(T1, "Uma loja vendeu 324 camisetas pela manhã e 289 à tarde. Quantas camisetas vendeu no dia?", 613, "Somamos as vendas: 324 + 289 = 613.", " camisetas");
-  adicionarNumerica(T1, "Uma biblioteca possui 1.250 livros de literatura e 875 livros didáticos. Quantos livros há no total?", 2125, "O total é a soma das duas quantidades: 1.250 + 875 = 2.125.", " livros");
-  adicionarNumerica(T1, "Em uma cidade, havia 12.450 habitantes. No ano seguinte, chegaram mais 1.230 pessoas. Qual passou a ser a população?", 13680, "A população aumentou, então somamos: 12.450 + 1.230 = 13.680.", " habitantes");
-  adicionarNumerica(T1, "Um mercado vendeu 2.345 produtos em janeiro e 3.128 em fevereiro. Quantos produtos foram vendidos nesses dois meses?", 5473, "Somamos os produtos vendidos nos dois meses: 2.345 + 3.128 = 5.473.", " produtos");
-  adicionarNumerica(T1, "Uma escola tem 428 alunos no turno da manhã e 397 no turno da tarde. Quantos alunos estudam nessa escola?", 825, "O total de alunos é 428 + 397 = 825.", " alunos");
-  adicionarNumerica(T1, "Uma fazenda colheu 3.250 laranjas em um dia e 2.780 no outro. Quantas laranjas foram colhidas?", 6030, "Somamos as colheitas dos dois dias: 3.250 + 2.780 = 6.030.", " laranjas");
-  adicionarNumerica(T1, "Um caminhão transportou 4.500 tijolos em uma viagem e 3.750 em outra. Quantos tijolos transportou ao todo?", 8250, "O total é 4.500 + 3.750 = 8.250.", " tijolos");
-
-  const T2 = TOPICOS[1];
-  const subtracoes = [
-    [500, 238], [900, 467], [1250, 684], [2000, 935], [3450, 1278],
-    [5600, 2345], [8732, 4219], [10000, 6785], [15420, 8935], [25000, 13746]
-  ];
-  subtracoes.forEach(([a, b]) => {
-    const correta = a - b;
-    adicionarNumerica(T2, `Resolva: ${numero(a)} - ${numero(b)}`, correta, `Para resolver, retiramos ${numero(b)} de ${numero(a)}: ${numero(a)} - ${numero(b)} = ${numero(correta)}.`);
-  });
-  adicionarNumerica(T2, "Uma escola tinha 800 folhas de papel. Foram usadas 275. Quantas folhas restaram?", 525, "Como parte foi usada, fazemos 800 - 275 = 525.", " folhas");
-  adicionarNumerica(T2, "Um mercado tinha 1.200 pacotes de arroz. Foram vendidos 468. Quantos pacotes ficaram?", 732, "Subtraímos os pacotes vendidos: 1.200 - 468 = 732.", " pacotes");
-  adicionarNumerica(T2, "Ana tinha R$ 350,00 e gastou R$ 127,00. Quanto sobrou?", 223, "Para saber o que sobrou, fazemos 350 - 127 = 223.", " reais");
-  adicionarNumerica(T2, "Em um estádio havia 5.000 lugares. Foram ocupados 3.785. Quantos lugares ficaram vazios?", 1215, "Os lugares vazios são 5.000 - 3.785 = 1.215.", " lugares");
-  adicionarNumerica(T2, "Uma fábrica produziu 2.450 peças e vendeu 1.895. Quantas peças ainda não foram vendidas?", 555, "Subtraímos as peças vendidas: 2.450 - 1.895 = 555.", " peças");
-  adicionarNumerica(T2, "Um agricultor colheu 4.320 mangas. Vendeu 2.875. Quantas mangas sobraram?", 1445, "Fazemos 4.320 - 2.875 = 1.445.", " mangas");
-  adicionarNumerica(T2, "Uma loja tinha 1.500 brinquedos no estoque e vendeu 639. Quantos brinquedos restaram?", 861, "Subtraímos as vendas do estoque: 1.500 - 639 = 861.", " brinquedos");
-  adicionarNumerica(T2, "Em uma escola, havia 960 alunos matriculados. Foram transferidos 84. Quantos alunos permaneceram?", 876, "Fazemos 960 - 84 = 876.", " alunos");
-  adicionarNumerica(T2, "Um ônibus deveria percorrer 780 km. Já percorreu 345 km. Quantos quilômetros ainda faltam?", 435, "O que falta é 780 - 345 = 435.", " km");
-  adicionarNumerica(T2, "Uma biblioteca tinha 3.200 livros. Doou 475 para outra escola. Quantos livros ficaram?", 2725, "Fazemos 3.200 - 475 = 2.725.", " livros");
-
-  const T3 = TOPICOS[2];
-  const multiplicacoes = [
-    [24, 3], [36, 5], [125, 4], [48, 12], [235, 6],
-    [72, 8], [105, 9], [230, 7], [315, 4], [426, 5]
-  ];
-  multiplicacoes.forEach(([a, b]) => {
-    const correta = a * b;
-    adicionarNumerica(T3, `Resolva: ${numero(a)} × ${numero(b)}`, correta, `A multiplicação representa parcelas iguais: ${numero(a)} × ${numero(b)} = ${numero(correta)}.`);
-  });
-  adicionarNumerica(T3, "Uma caixa possui 24 lápis. Quantos lápis há em 8 caixas iguais?", 192, "São 8 caixas com 24 lápis em cada: 24 × 8 = 192.", " lápis");
-  adicionarNumerica(T3, "Um ônibus transporta 42 passageiros. Quantos passageiros podem ser transportados em 6 ônibus iguais?", 252, "Multiplicamos 42 passageiros por 6 ônibus: 42 × 6 = 252.", " passageiros");
-  adicionarNumerica(T3, "Uma escola comprou 15 pacotes com 30 folhas cada. Quantas folhas foram compradas?", 450, "São 15 pacotes de 30 folhas: 15 × 30 = 450.", " folhas");
-  adicionarNumerica(T3, "Um cinema possui 18 fileiras com 25 cadeiras em cada fileira. Quantas cadeiras há no cinema?", 450, "Multiplicamos fileiras por cadeiras: 18 × 25 = 450.", " cadeiras");
-  adicionarNumerica(T3, "Uma loja recebeu 12 caixas com 45 brinquedos em cada caixa. Quantos brinquedos recebeu?", 540, "São 12 caixas com 45 brinquedos: 12 × 45 = 540.", " brinquedos");
-  adicionarNumerica(T3, "Um pedreiro usa 125 tijolos por parede. Quantos tijolos usará em 8 paredes?", 1000, "Multiplicamos 125 por 8: 125 × 8 = 1.000.", " tijolos");
-  adicionarNumerica(T3, "Uma padaria produz 230 pães por hora. Quantos pães produzirá em 5 horas?", 1150, "Em 5 horas: 230 × 5 = 1.150.", " pães");
-  adicionarNumerica(T3, "Uma sala tem 7 fileiras com 9 cadeiras em cada uma. Quantas cadeiras há na sala?", 63, "Multiplicamos 7 × 9 = 63.", " cadeiras");
-  adicionarNumerica(T3, "Um estacionamento tem 14 vagas em cada fila. Se há 9 filas, quantas vagas existem?", 126, "São 9 filas com 14 vagas: 14 × 9 = 126.", " vagas");
-  adicionarNumerica(T3, "Um pacote contém 36 figurinhas. Quantas figurinhas há em 11 pacotes?", 396, "Multiplicamos 36 × 11 = 396.", " figurinhas");
-
-  const T4 = TOPICOS[3];
-  const divisoes = [
-    [48, 6], [72, 8], [125, 5], [144, 12], [360, 9],
-    [240, 6], [560, 8], [900, 10], [1200, 12], [2400, 24]
-  ];
-  divisoes.forEach(([a, b]) => {
-    const correta = a / b;
-    adicionarNumerica(T4, `Resolva: ${numero(a)} ÷ ${numero(b)}`, correta, `Dividir é repartir em partes iguais: ${numero(a)} ÷ ${numero(b)} = ${numero(correta)}.`);
-  });
-  adicionarNumerica(T4, "Uma professora quer dividir 60 lápis igualmente entre 5 alunos. Quantos lápis cada aluno receberá?", 12, "Dividimos 60 por 5: 60 ÷ 5 = 12.", " lápis");
-  adicionarNumerica(T4, "Uma escola vai levar 144 alunos em ônibus. Cada ônibus comporta 36 alunos. Quantos ônibus serão necessários?", 4, "Fazemos 144 ÷ 36 = 4.", " ônibus");
-  adicionarNumerica(T4, "Um pacote contém 96 balas. Elas serão divididas igualmente entre 8 crianças. Quantas balas cada criança receberá?", 12, "Dividimos 96 por 8: 96 ÷ 8 = 12.", " balas");
-  adicionarNumerica(T4, "Um mercado recebeu 240 maçãs e quer colocá-las em caixas com 12 maçãs cada. Quantas caixas serão usadas?", 20, "Fazemos 240 ÷ 12 = 20.", " caixas");
-  adicionarNumerica(T4, "Uma turma arrecadou R$ 500,00 e dividiu igualmente entre 10 grupos. Quanto cada grupo recebeu?", 50, "Dividimos 500 por 10: 500 ÷ 10 = 50.", " reais");
-  adicionarNumerica(T4, "Uma escola comprou 360 cadernos para dividir igualmente entre 12 turmas. Quantos cadernos cada turma recebeu?", 30, "Fazemos 360 ÷ 12 = 30.", " cadernos");
-  adicionarNumerica(T4, "Um agricultor colocou 480 laranjas em caixas com 24 laranjas cada. Quantas caixas foram usadas?", 20, "Fazemos 480 ÷ 24 = 20.", " caixas");
-  adicionarNumerica(T4, "Uma fábrica produziu 1.200 peças em 6 dias. Quantas peças produziu por dia?", 200, "Fazemos 1.200 ÷ 6 = 200.", " peças");
-  adicionarNumerica(T4, "Um professor dividiu 180 folhas entre 9 alunos. Quantas folhas cada aluno recebeu?", 20, "Dividimos 180 por 9: 180 ÷ 9 = 20.", " folhas");
-  adicionarNumerica(T4, "Um mercado quer dividir 720 garrafas em caixas com 12 garrafas cada. Quantas caixas serão formadas?", 60, "Fazemos 720 ÷ 12 = 60.", " caixas");
-
-  const T5 = TOPICOS[4];
-  function adicionarDivisaoResto(enunciado, dividendo, divisor, unidadeQuociente = "", unidadeResto = "") {
-    const quociente = Math.floor(dividendo / divisor);
-    const resto = dividendo % divisor;
-    const correta = `${numero(quociente)}${unidadeQuociente} e resto ${numero(resto)}${unidadeResto}`;
-    const d1 = `${numero(quociente + 1)}${unidadeQuociente} e resto ${numero(Math.max(0, resto - 1))}${unidadeResto}`;
-    const d2 = `${numero(Math.max(0, quociente - 1))}${unidadeQuociente} e resto ${numero(resto + divisor)}${unidadeResto}`;
-    const d3 = `${numero(quociente)}${unidadeQuociente} e resto ${numero(resto + 1)}${unidadeResto}`;
-    adicionarQuestao(T5, enunciado, correta, `Dividimos ${numero(dividendo)} por ${numero(divisor)}. O quociente é ${numero(quociente)} e o resto é ${numero(resto)}, pois ${numero(divisor)} × ${numero(quociente)} = ${numero(divisor * quociente)} e ${numero(dividendo)} - ${numero(divisor * quociente)} = ${numero(resto)}.`, [d1, d2, d3]);
-  }
-  [[29,5],[47,6],[85,9],[103,10],[157,12],[218,20],[76,7],[94,8],[135,11],[250,18]].forEach(([a,b]) => {
-    adicionarDivisaoResto(`Resolva e indique o resto: ${numero(a)} ÷ ${numero(b)}`, a, b);
-  });
-  adicionarDivisaoResto("Uma professora tem 38 balas para dividir igualmente entre 5 alunos. Quantas balas cada um receberá e quantas sobrarão?", 38, 5, " balas", " balas");
-  adicionarDivisaoResto("Um grupo de 53 estudantes será organizado em equipes com 6 alunos. Quantas equipes completas serão formadas e quantos alunos sobrarão?", 53, 6, " equipes", " alunos");
-  adicionarDivisaoResto("Uma loja precisa guardar 95 camisetas em caixas com capacidade para 8 camisetas cada. Quantas caixas completas serão feitas e quantas camisetas sobrarão?", 95, 8, " caixas", " camisetas");
-  adicionarDivisaoResto("Um agricultor colheu 127 laranjas e quer colocá-las em sacolas com 10 laranjas cada. Quantas sacolas completas fará e quantas laranjas sobrarão?", 127, 10, " sacolas", " laranjas");
-  adicionarDivisaoResto("Uma biblioteca recebeu 218 livros e quer distribuí-los em prateleiras com 20 livros cada. Quantas prateleiras completas serão preenchidas e quantos livros sobrarão?", 218, 20, " prateleiras", " livros");
-  adicionarDivisaoResto("Uma turma tem 41 alunos. O professor quer formar grupos de 4 alunos. Quantos grupos completos serão formados e quantos alunos ficarão sem grupo completo?", 41, 4, " grupos", " alunos");
-  adicionarDivisaoResto("Uma padaria fez 89 pães e quer colocá-los em sacos com 6 pães cada. Quantos sacos completos serão feitos e quantos pães sobrarão?", 89, 6, " sacos", " pães");
-  adicionarDivisaoResto("Um professor tem 115 folhas para distribuir em pacotes com 9 folhas. Quantos pacotes completos fará e quantas folhas sobrarão?", 115, 9, " pacotes", " folhas");
-  adicionarDivisaoResto("Uma escola recebeu 260 lápis e quer separá-los em caixas com 24 lápis cada. Quantas caixas completas serão formadas e quantos lápis sobrarão?", 260, 24, " caixas", " lápis");
-  adicionarDivisaoResto("Um mercado recebeu 345 ovos e quer organizá-los em cartelas com 12 ovos cada. Quantas cartelas completas serão feitas e quantos ovos sobrarão?", 345, 12, " cartelas", " ovos");
-
-  const T6 = TOPICOS[5];
-  const expressoes = [
-    ["12 + 5 × 3", 12 + 5 * 3, "Primeiro fazemos a multiplicação: 5 × 3 = 15. Depois: 12 + 15 = 27."],
-    ["40 - 24 ÷ 6", 40 - 24 / 6, "Primeiro fazemos a divisão: 24 ÷ 6 = 4. Depois: 40 - 4 = 36."],
-    ["(18 + 12) ÷ 5", (18 + 12) / 5, "Primeiro resolvemos os parênteses: 18 + 12 = 30. Depois: 30 ÷ 5 = 6."],
-    ["7 × (9 - 4)", 7 * (9 - 4), "Primeiro resolvemos os parênteses: 9 - 4 = 5. Depois: 7 × 5 = 35."],
-    ["100 - 8 × 6", 100 - 8 * 6, "Primeiro fazemos a multiplicação: 8 × 6 = 48. Depois: 100 - 48 = 52."],
-    ["35 + 20 ÷ 5", 35 + 20 / 5, "Primeiro fazemos a divisão: 20 ÷ 5 = 4. Depois: 35 + 4 = 39."],
-    ["(25 + 15) × 2", (25 + 15) * 2, "Primeiro os parênteses: 25 + 15 = 40. Depois: 40 × 2 = 80."],
-    ["80 ÷ 4 + 12", 80 / 4 + 12, "Primeiro a divisão: 80 ÷ 4 = 20. Depois: 20 + 12 = 32."],
-    ["90 - (15 + 25)", 90 - (15 + 25), "Primeiro os parênteses: 15 + 25 = 40. Depois: 90 - 40 = 50."],
-    ["6 × 8 + 30 ÷ 5", 6 * 8 + 30 / 5, "Multiplicação e divisão primeiro: 6 × 8 = 48 e 30 ÷ 5 = 6. Depois: 48 + 6 = 54."],
-    ["50 + 4 × 9", 50 + 4 * 9, "Primeiro 4 × 9 = 36. Depois: 50 + 36 = 86."],
-    ["(60 - 20) ÷ 4", (60 - 20) / 4, "Primeiro 60 - 20 = 40. Depois: 40 ÷ 4 = 10."],
-    ["120 - 6 × 10", 120 - 6 * 10, "Primeiro 6 × 10 = 60. Depois: 120 - 60 = 60."],
-    ["45 ÷ 5 + 18", 45 / 5 + 18, "Primeiro 45 ÷ 5 = 9. Depois: 9 + 18 = 27."],
-    ["(14 + 6) × 3", (14 + 6) * 3, "Primeiro 14 + 6 = 20. Depois: 20 × 3 = 60."],
-    ["200 - 100 ÷ 5", 200 - 100 / 5, "Primeiro 100 ÷ 5 = 20. Depois: 200 - 20 = 180."],
-    ["9 × 7 - 15", 9 * 7 - 15, "Primeiro 9 × 7 = 63. Depois: 63 - 15 = 48."],
-    ["64 ÷ 8 + 6 × 4", 64 / 8 + 6 * 4, "Primeiro 64 ÷ 8 = 8 e 6 × 4 = 24. Depois: 8 + 24 = 32."],
-    ["(80 - 32) ÷ 6", (80 - 32) / 6, "Primeiro 80 - 32 = 48. Depois: 48 ÷ 6 = 8."],
-    ["150 - (25 × 4)", 150 - (25 * 4), "Primeiro 25 × 4 = 100. Depois: 150 - 100 = 50."],
-    ["30 + 12 × 2 - 10", 30 + 12 * 2 - 10, "Primeiro 12 × 2 = 24. Depois: 30 + 24 - 10 = 44."],
-    ["(45 + 15) ÷ 10", (45 + 15) / 10, "Primeiro 45 + 15 = 60. Depois: 60 ÷ 10 = 6."],
-    ["8 × (20 - 15)", 8 * (20 - 15), "Primeiro 20 - 15 = 5. Depois: 8 × 5 = 40."],
-    ["72 ÷ 9 + 35", 72 / 9 + 35, "Primeiro 72 ÷ 9 = 8. Depois: 8 + 35 = 43."],
-    ["100 - 5 × (6 + 4)", 100 - 5 * (6 + 4), "Primeiro 6 + 4 = 10. Depois 5 × 10 = 50. Por fim: 100 - 50 = 50."],
-    ["(30 + 18) ÷ 6 + 7", (30 + 18) / 6 + 7, "Primeiro 30 + 18 = 48. Depois 48 ÷ 6 = 8. Por fim: 8 + 7 = 15."],
-    ["4 × 12 + 60 ÷ 10", 4 * 12 + 60 / 10, "Primeiro 4 × 12 = 48 e 60 ÷ 10 = 6. Depois: 48 + 6 = 54."],
-    ["(100 - 40) ÷ 3", (100 - 40) / 3, "Primeiro 100 - 40 = 60. Depois: 60 ÷ 3 = 20."],
-    ["25 + 75 ÷ 5", 25 + 75 / 5, "Primeiro 75 ÷ 5 = 15. Depois: 25 + 15 = 40."],
-    ["10 × (8 + 2) - 35", 10 * (8 + 2) - 35, "Primeiro 8 + 2 = 10. Depois 10 × 10 = 100. Por fim: 100 - 35 = 65."]
-  ];
-  expressoes.forEach(([texto, correta, explicacao]) => {
-    adicionarNumerica(T6, `Resolva: ${texto}`, correta, explicacao);
-  });
-
-  const T7 = TOPICOS[6];
-  const problemasMistos = [
-    ["Uma papelaria comprou 12 caixas com 25 cadernos cada uma. Depois vendeu 87 cadernos. Quantos cadernos sobraram?", 12 * 25 - 87, "Primeiro calculamos o total comprado: 12 × 25 = 300. Depois subtraímos o que foi vendido: 300 - 87 = 213.", " cadernos"],
-    ["Uma escola recebeu 350 livros. Depois comprou mais 125 e distribuiu 98 para os alunos. Quantos livros restaram?", 350 + 125 - 98, "Somamos os livros recebidos e comprados: 350 + 125 = 475. Depois subtraímos 98: 475 - 98 = 377.", " livros"],
-    ["Em uma festa, foram compradas 15 caixas com 24 refrigerantes cada. Durante a festa, foram consumidos 275 refrigerantes. Quantos sobraram?", 15 * 24 - 275, "Primeiro 15 × 24 = 360. Depois 360 - 275 = 85.", " refrigerantes"],
-    ["Uma turma arrecadou R$ 480,00. Esse valor será dividido igualmente entre 6 grupos. Depois, cada grupo gastou R$ 35,00. Quanto sobrou para cada grupo?", 480 / 6 - 35, "Primeiro 480 ÷ 6 = 80. Depois 80 - 35 = 45.", " reais"],
-    ["Um supermercado recebeu 20 caixas com 18 pacotes de arroz em cada caixa. Foram vendidos 145 pacotes. Quantos pacotes restaram?", 20 * 18 - 145, "Primeiro 20 × 18 = 360. Depois 360 - 145 = 215.", " pacotes"],
-    ["Uma escola tem 18 salas com 32 carteiras em cada sala. Se 75 carteiras estão quebradas, quantas carteiras podem ser usadas?", 18 * 32 - 75, "Primeiro 18 × 32 = 576. Depois 576 - 75 = 501.", " carteiras"],
-    ["Um ônibus faz 8 viagens por dia levando 42 passageiros em cada viagem. Quantos passageiros transporta em um dia?", 8 * 42, "Multiplicamos as viagens pelos passageiros: 8 × 42 = 336.", " passageiros"],
-    ["Uma loja comprou 300 brinquedos e separou 48 para uma promoção. O restante foi dividido igualmente em 12 prateleiras. Quantos brinquedos ficaram em cada prateleira?", (300 - 48) / 12, "Primeiro 300 - 48 = 252. Depois 252 ÷ 12 = 21.", " brinquedos"],
-    ["Um aluno tinha 250 figurinhas. Ganhou 80 e depois perdeu 45. Com quantas figurinhas ficou?", 250 + 80 - 45, "Somamos o que ganhou e subtraímos o que perdeu: 250 + 80 - 45 = 285.", " figurinhas"],
-    ["Uma fábrica produz 125 peças por dia. Quantas peças ficarão no estoque após 7 dias, se vender 600 peças?", 125 * 7 - 600, "Primeiro 125 × 7 = 875. Depois 875 - 600 = 275.", " peças"],
-    ["Uma escola comprou 9 caixas com 36 lápis cada. Depois distribuiu 120 lápis. Quantos lápis restaram?", 9 * 36 - 120, "Primeiro 9 × 36 = 324. Depois 324 - 120 = 204.", " lápis"],
-    ["Uma loja vendeu 45 produtos por dia durante 6 dias. Depois recebeu mais 180 produtos no estoque. Quantos produtos passaram pela loja nesse período?", 45 * 6 + 180, "Primeiro 45 × 6 = 270. Depois 270 + 180 = 450.", " produtos"],
-    ["Um mercado tinha 800 garrafas de água. Vendeu 325 pela manhã e 210 à tarde. Quantas garrafas sobraram?", 800 - 325 - 210, "Subtraímos as vendas: 800 - 325 - 210 = 265.", " garrafas"],
-    ["Uma família comprou 4 pacotes com 12 garrafas de suco cada. Depois consumiu 17 garrafas. Quantas sobraram?", 4 * 12 - 17, "Primeiro 4 × 12 = 48. Depois 48 - 17 = 31.", " garrafas"],
-    ["Uma escola recebeu 600 folhas de papel. Usou 175 em uma atividade e 230 em outra. Quantas folhas sobraram?", 600 - 175 - 230, "Subtraímos as folhas usadas: 600 - 175 - 230 = 195.", " folhas"],
-    ["Uma turma de 36 alunos arrecadou R$ 18,00 cada um. O valor total foi dividido igualmente entre 6 projetos. Quanto cada projeto recebeu?", 36 * 18 / 6, "Primeiro 36 × 18 = 648. Depois 648 ÷ 6 = 108.", " reais"],
-    ["Uma biblioteca recebeu 15 caixas com 20 livros cada. Depois emprestou 85 livros. Quantos livros ficaram?", 15 * 20 - 85, "Primeiro 15 × 20 = 300. Depois 300 - 85 = 215.", " livros"],
-    ["Um professor comprou 120 canetas para dividir entre 8 turmas. Depois comprou mais 40 canetas. Quantas canetas terá no total?", 120 + 40, "O problema pergunta o total de canetas que ele terá: 120 + 40 = 160.", " canetas"],
-    ["Uma empresa comprou 25 pacotes com 12 folhas de adesivos cada. Usou 90 folhas. Quantas folhas sobraram?", 25 * 12 - 90, "Primeiro 25 × 12 = 300. Depois 300 - 90 = 210.", " folhas"],
-    ["Um restaurante preparou 240 refeições. Vendeu 180 e doou 35. Quantas refeições restaram?", 240 - 180 - 35, "Subtraímos as refeições que saíram: 240 - 180 - 35 = 25.", " refeições"]
-  ];
-  problemasMistos.forEach(([texto, correta, explicacao, unidade]) => adicionarNumerica(T7, texto, correta, explicacao, unidade));
-
-  const T8 = TOPICOS[7];
-  adicionarMultipla(T8, "O que são sólidos geométricos?", "Figuras com três dimensões: comprimento, largura e altura", ["Figuras planas com apenas comprimento e largura", "Linhas abertas formadas por curvas", "Apenas desenhos feitos com régua"], "Sólidos geométricos são figuras espaciais, ou seja, possuem três dimensões e ocupam espaço.");
-  adicionarMultipla(T8, "Qual opção apresenta apenas exemplos de sólidos geométricos?", "Cubo, cilindro e esfera", ["Triângulo, quadrado e círculo", "Linha, ponto e reta", "Pentágono, hexágono e retângulo"], "Cubo, cilindro e esfera são sólidos, pois possuem três dimensões.");
-  adicionarMultipla(T8, "Qual sólido geométrico se parece com uma bola?", "Esfera", ["Cubo", "Cone", "Cilindro"], "A bola lembra uma esfera, que é totalmente arredondada.");
-  adicionarMultipla(T8, "Qual sólido geométrico se parece com uma lata de refrigerante?", "Cilindro", ["Cone", "Esfera", "Pirâmide"], "A lata possui duas bases circulares e uma superfície lateral curva, como o cilindro.");
-  adicionarMultipla(T8, "Qual sólido geométrico se parece com uma caixa de sapato?", "Paralelepípedo", ["Esfera", "Cone", "Cilindro"], "A caixa de sapato lembra um paralelepípedo, com faces retangulares.");
-  adicionarMultipla(T8, "Qual sólido geométrico possui 6 faces quadradas?", "Cubo", ["Cone", "Esfera", "Cilindro"], "O cubo possui 6 faces, e todas elas são quadradas.");
-  adicionarMultipla(T8, "Qual sólido geométrico possui uma base circular e um vértice?", "Cone", ["Cilindro", "Esfera", "Cubo"], "O cone tem uma base circular, uma superfície curva e um vértice.");
-  adicionarMultipla(T8, "Qual sólido geométrico possui duas bases circulares e uma superfície lateral curva?", "Cilindro", ["Cone", "Pirâmide", "Cubo"], "O cilindro tem duas bases circulares paralelas e uma superfície lateral curva.");
-  adicionarMultipla(T8, "Qual sólido geométrico é totalmente arredondado?", "Esfera", ["Cubo", "Prisma", "Pirâmide"], "A esfera é um corpo redondo sem faces planas, arestas ou vértices.");
-  adicionarMultipla(T8, "Qual é a principal diferença entre cubo e paralelepípedo?", "No cubo todas as faces são quadradas; no paralelepípedo as faces geralmente são retangulares", ["O cubo é plano e o paralelepípedo é espacial", "O cubo tem base circular e o paralelepípedo não", "O cubo não possui arestas"], "Ambos são sólidos espaciais, mas no cubo as faces são quadradas.");
-  adicionarMultipla(T8, "O que são poliedros?", "Sólidos formados apenas por faces planas", ["Sólidos totalmente arredondados", "Figuras abertas", "Figuras com apenas curvas"], "Poliedros são sólidos geométricos formados por faces planas.");
-  adicionarMultipla(T8, "O cubo é classificado como:", "Poliedro", ["Corpo redondo", "Linha curva", "Figura aberta"], "O cubo é um poliedro porque possui apenas faces planas.");
-  adicionarMultipla(T8, "O cilindro é classificado como:", "Corpo redondo", ["Poliedro", "Polígono", "Prisma triangular"], "O cilindro tem superfície curva, por isso é um corpo redondo.");
-  adicionarMultipla(T8, "A esfera é um poliedro?", "Não, porque não possui faces planas", ["Sim, porque tem vértices", "Sim, porque tem faces quadradas", "Não, porque é uma figura plana"], "A esfera é um corpo redondo, não um poliedro.");
-  adicionarMultipla(T8, "O cone possui superfície curva?", "Sim, além de uma base circular", ["Não, só possui faces quadradas", "Não, é formado apenas por triângulos", "Sim, mas possui duas bases circulares"], "O cone possui uma base circular, uma superfície lateral curva e um vértice.");
-  adicionarMultipla(T8, "Qual opção apresenta dois corpos redondos?", "Cone e cilindro", ["Cubo e pirâmide", "Prisma e cubo", "Quadrado e retângulo"], "Cone e cilindro possuem superfície curva, portanto são corpos redondos.");
-  adicionarMultipla(T8, "Qual opção apresenta dois poliedros?", "Cubo e pirâmide", ["Esfera e cone", "Cilindro e esfera", "Círculo e oval"], "Cubo e pirâmide são poliedros, pois possuem faces planas.");
-  adicionarMultipla(T8, "Qual é o nome do sólido que possui duas bases iguais e paralelas?", "Prisma", ["Cone", "Esfera", "Círculo"], "O prisma possui duas bases iguais e paralelas.");
-  adicionarMultipla(T8, "Qual é o nome do sólido que possui uma base e faces laterais triangulares?", "Pirâmide", ["Cilindro", "Esfera", "Retângulo"], "A pirâmide tem uma base e faces laterais em forma de triângulo.");
-  adicionarMultipla(T8, "Uma pirâmide pode ter base triangular, quadrada ou pentagonal?", "Sim, a base pode ter diferentes formatos de polígonos", ["Não, toda pirâmide tem base circular", "Não, toda pirâmide é uma esfera", "Sim, mas não possui faces laterais"], "As pirâmides recebem nomes de acordo com a forma da base.");
-
-  const T9 = TOPICOS[8];
-  adicionarMultipla(T9, "O que são faces de um sólido geométrico?", "As superfícies que formam o sólido", ["Os pontos de encontro das arestas", "As linhas curvas do sólido", "A medida do contorno"], "Faces são as superfícies do sólido, como os quadrados que formam um cubo.");
-  adicionarMultipla(T9, "O que são arestas de um sólido geométrico?", "Os segmentos onde duas faces se encontram", ["As superfícies do sólido", "O espaço dentro do sólido", "Apenas os cantos arredondados"], "Arestas são os segmentos formados pelo encontro de duas faces.");
-  adicionarMultipla(T9, "O que são vértices de um sólido geométrico?", "Os pontos onde as arestas se encontram", ["As superfícies planas", "As bases circulares", "As linhas curvas"], "Vértices são os pontos, ou cantos, onde as arestas se encontram.");
-  adicionarMultipla(T9, "Quantas faces tem um cubo?", "6", ["4", "8", "12"], "O cubo possui 6 faces quadradas.");
-  adicionarMultipla(T9, "Quantas arestas tem um cubo?", "12", ["6", "8", "10"], "O cubo possui 12 arestas.");
-  adicionarMultipla(T9, "Quantos vértices tem um cubo?", "8", ["4", "6", "12"], "O cubo possui 8 vértices.");
-  adicionarMultipla(T9, "Quantas faces tem um paralelepípedo?", "6", ["4", "8", "12"], "O paralelepípedo possui 6 faces.");
-  adicionarMultipla(T9, "Quantas arestas tem um paralelepípedo?", "12", ["6", "8", "14"], "Assim como o cubo, o paralelepípedo possui 12 arestas.");
-  adicionarMultipla(T9, "Quantos vértices tem um paralelepípedo?", "8", ["4", "6", "12"], "O paralelepípedo possui 8 vértices.");
-  adicionarMultipla(T9, "Uma pirâmide de base quadrada possui quantas faces ao todo?", "5", ["4", "6", "8"], "Ela tem 1 base quadrada e 4 faces laterais triangulares: 1 + 4 = 5 faces.");
-  adicionarMultipla(T9, "Uma pirâmide de base quadrada possui quantos vértices?", "5", ["4", "6", "8"], "São 4 vértices na base e 1 vértice no topo: 5 vértices.");
-  adicionarMultipla(T9, "Uma pirâmide de base quadrada possui quantas arestas?", "8", ["4", "5", "12"], "São 4 arestas na base e 4 arestas laterais: 8 arestas.");
-  adicionarMultipla(T9, "O cilindro possui vértices?", "Não, pois não possui cantos", ["Sim, possui 8 vértices", "Sim, possui 4 vértices", "Sim, possui 1 vértice"], "O cilindro não possui vértices porque suas bases são circulares e não têm cantos.");
-  adicionarMultipla(T9, "O cone possui vértice?", "Sim, possui um vértice", ["Não possui nenhum", "Possui 8", "Possui 12"], "O cone tem um ponto no topo, chamado vértice.");
-  adicionarMultipla(T9, "A esfera possui faces planas, arestas ou vértices?", "Não possui faces planas, arestas nem vértices", ["Possui 6 faces e 8 vértices", "Possui 2 bases e 1 vértice", "Possui 12 arestas"], "A esfera é totalmente arredondada, sem faces planas, arestas ou vértices.");
-
-  const T10 = TOPICOS[9];
-  adicionarMultipla(T10, "O que é um polígono?", "Uma figura plana fechada formada por segmentos de reta", ["Um sólido com três dimensões", "Uma figura sempre arredondada", "Uma linha aberta formada por curvas"], "Polígonos são figuras planas fechadas formadas apenas por segmentos de reta.");
-  adicionarMultipla(T10, "O círculo é um polígono?", "Não, porque possui linha curva", ["Sim, porque é fechado", "Sim, porque possui lados retos", "Não, porque é um sólido geométrico"], "O círculo é uma figura plana, mas não é polígono porque não é formado por segmentos de reta.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 3 lados?", "Triângulo", ["Quadrilátero", "Pentágono", "Hexágono"], "O polígono de 3 lados é chamado de triângulo.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 4 lados?", "Quadrilátero", ["Triângulo", "Pentágono", "Octógono"], "O polígono de 4 lados é chamado de quadrilátero.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 5 lados?", "Pentágono", ["Hexágono", "Heptágono", "Triângulo"], "O polígono de 5 lados é o pentágono.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 6 lados?", "Hexágono", ["Pentágono", "Heptágono", "Octógono"], "O polígono de 6 lados é o hexágono.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 7 lados?", "Heptágono", ["Hexágono", "Octógono", "Decágono"], "O polígono de 7 lados é o heptágono.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 8 lados?", "Octógono", ["Pentágono", "Hexágono", "Decágono"], "O polígono de 8 lados é o octógono.");
-  adicionarMultipla(T10, "Como se chama o polígono que possui 10 lados?", "Decágono", ["Pentágono", "Hexágono", "Dodecágono"], "O polígono de 10 lados é o decágono.");
-  adicionarMultipla(T10, "Quantos lados possui um pentágono?", "5", ["3", "4", "6"], "Pentágono é o polígono de 5 lados.");
-  adicionarMultipla(T10, "Quantos lados possui um hexágono?", "6", ["5", "7", "8"], "Hexágono é o polígono de 6 lados.");
-  adicionarMultipla(T10, "Quantos lados possui um octógono?", "8", ["6", "7", "10"], "Octógono é o polígono de 8 lados.");
-  adicionarMultipla(T10, "Classifique o triângulo de lados 5 cm, 5 cm e 5 cm.", "Equilátero", ["Isósceles", "Escaleno", "Quadrilátero"], "Quando os três lados são iguais, o triângulo é equilátero.");
-  adicionarMultipla(T10, "Classifique o triângulo de lados 7 cm, 7 cm e 4 cm.", "Isósceles", ["Equilátero", "Escaleno", "Pentágono"], "Quando dois lados são iguais, o triângulo é isósceles.");
-  adicionarMultipla(T10, "Calcule o perímetro de um retângulo que possui 12 cm de comprimento e 5 cm de largura.", "34 cm", ["17 cm", "24 cm", "60 cm"], "O perímetro é a soma dos quatro lados: 12 + 5 + 12 + 5 = 34 cm.");
-}
-
-function preencherFiltro() {
-  const filtro = document.getElementById("filtroTopico");
-  TOPICOS.forEach((topico) => {
-    const option = document.createElement("option");
-    option.value = topico;
-    option.textContent = topico;
-    filtro.appendChild(option);
-  });
-}
-
-const TEMPO_MINIMO_RESPOSTA = 60;
-const CHAVE_INICIOS = "iniciosQuestoesRevisao6Ano";
-const CHAVE_RANKING = "rankingRevisao6Ano";
-let iniciosQuestoes = JSON.parse(localStorage.getItem(CHAVE_INICIOS) || "{}");
-let ranking = JSON.parse(localStorage.getItem(CHAVE_RANKING) || "[]");
-let intervaloTimer = null;
-
-function obterQuestaoAtual() {
-  return bancoQuestoes.find((q) => q.id === idsAtuais[indiceAtual]);
-}
-
-function salvarInicios() {
-  localStorage.setItem(CHAVE_INICIOS, JSON.stringify(iniciosQuestoes));
-}
-
-function salvarRanking() {
-  localStorage.setItem(CHAVE_RANKING, JSON.stringify(ranking));
-}
-
-function respostaEstaCorreta(questao) {
-  return respostas[questao.id] !== undefined && respostas[questao.id] === questao.correta;
-}
-
-function calcularResumo(ids = bancoQuestoes.map((q) => q.id)) {
-  const questoes = ids.map((id) => bancoQuestoes.find((q) => q.id === id)).filter(Boolean);
-  const total = questoes.length;
-  let respondidas = 0;
-  let acertos = 0;
-
-  questoes.forEach((questao) => {
-    if (respostas[questao.id] !== undefined) {
-      respondidas++;
-      if (respostas[questao.id] === questao.correta) acertos++;
+  estado.questoes.forEach(q => {
+    if (!estado.estatisticas[q.topico]) {
+      estado.estatisticas[q.topico] = { total: 0, acertos: 0, erros: 0 };
     }
+    estado.estatisticas[q.topico].total++;
   });
 
-  return {
-    total,
-    respondidas,
-    acertos,
-    erros: respondidas - acertos,
-    pendentes: total - respondidas,
-    percentual: total ? Math.round((acertos / total) * 100) : 0,
-    percentualRespondido: total ? Math.round((respondidas / total) * 100) : 0
-  };
-}
-
-function atualizarTopo() {
-  const geral = calcularResumo();
-  document.getElementById("totalQuestoes").textContent = bancoQuestoes.length;
-  document.getElementById("respondidasTopo").textContent = geral.respondidas;
-  document.getElementById("acertosTopo").textContent = geral.acertos;
-  document.getElementById("aproveitamentoTopo").textContent = `${geral.percentual}%`;
-  atualizarPlacarTopicos();
-}
-
-function atualizarPlacarTopicos() {
-  const area = document.getElementById("placarTopicos");
-  if (!area) return;
-
-  area.innerHTML = TOPICOS.map((topico) => {
-    const idsTopico = bancoQuestoes.filter((q) => q.topico === topico).map((q) => q.id);
-    const resumo = calcularResumo(idsTopico);
-    const classe = resumo.erros > 0 ? "tem-erros" : resumo.respondidas === resumo.total && resumo.total > 0 ? "concluido" : "em-andamento";
-
-    return `
-      <article class="placar-card ${classe}">
-        <div class="placar-card__topo">
-          <h3>${topico}</h3>
-          <strong>${resumo.acertos}/${resumo.total}</strong>
-        </div>
-        <div class="placar-card__detalhes">
-          <span>${resumo.percentual}% de aproveitamento</span>
-          <span>${resumo.erros} erro(s)</span>
-          <span>${resumo.pendentes} pendente(s)</span>
-        </div>
-        <div class="placar-card__barra" aria-hidden="true"><span style="width:${resumo.percentual}%"></span></div>
-      </article>`;
-  }).join("");
-}
-
-function rotuloModoAtual() {
-  if (modoAtual === "todos") return "Todos os tópicos";
-  return modoAtual;
-}
-
-function atualizarProgresso() {
-  const resumoAtual = calcularResumo(idsAtuais);
-  const percentualRespondido = resumoAtual.percentualRespondido;
-  const totalAtual = idsAtuais.length || 0;
-  const posicaoAtual = totalAtual ? indiceAtual + 1 : 0;
-
-  const textoModoQuestao = document.getElementById("textoModoQuestao");
-  const textoProgresso = document.getElementById("textoProgresso");
-  const percentualProgresso = document.getElementById("percentualProgresso");
-  const barraProgresso = document.getElementById("barraProgresso");
-  const acertosModo = document.getElementById("acertosModo");
-  const errosModo = document.getElementById("errosModo");
-  const pendentesModo = document.getElementById("pendentesModo");
-
-  if (textoModoQuestao) textoModoQuestao.textContent = rotuloModoAtual();
-  if (textoProgresso) textoProgresso.textContent = `Questão ${posicaoAtual} de ${totalAtual} • ${resumoAtual.respondidas} respondidas`;
-  if (percentualProgresso) percentualProgresso.textContent = `${percentualRespondido}%`;
-  if (barraProgresso) barraProgresso.style.width = `${percentualRespondido}%`;
-  if (acertosModo) acertosModo.textContent = resumoAtual.acertos;
-  if (errosModo) errosModo.textContent = resumoAtual.erros;
-  if (pendentesModo) pendentesModo.textContent = resumoAtual.pendentes;
-}
-
-function segundosRestantesQuestao(questao) {
-  if (respostas[questao.id] !== undefined) return 0;
-  if (!iniciosQuestoes[questao.id]) {
-    iniciosQuestoes[questao.id] = Date.now();
-    salvarInicios();
-  }
-  const decorrido = Math.floor((Date.now() - iniciosQuestoes[questao.id]) / 1000);
-  return Math.max(0, TEMPO_MINIMO_RESPOSTA - decorrido);
-}
-
-function formatarTempo(segundos) {
-  const min = Math.floor(segundos / 60).toString().padStart(2, "0");
-  const seg = Math.floor(segundos % 60).toString().padStart(2, "0");
-  return `${min}:${seg}`;
-}
-
-function atualizarTimerVisual(questaoId) {
-  const questao = bancoQuestoes.find((q) => q.id === questaoId);
-  if (!questao) return;
-
-  const restante = segundosRestantesQuestao(questao);
-  const tempo = document.getElementById("tempoQuestao");
-  const aviso = document.getElementById("avisoTempoQuestao");
-  const botoes = document.querySelectorAll(".alternativa");
-
-  if (tempo) tempo.textContent = formatarTempo(restante);
-
-  if (restante <= 0) {
-    botoes.forEach((botao) => {
-      if (respostas[questao.id] === undefined) {
-        botao.disabled = false;
-        botao.classList.remove("bloqueada");
-        botao.removeAttribute("aria-disabled");
-      }
-    });
-    if (aviso) aviso.textContent = "Agora você pode marcar uma alternativa.";
-    if (intervaloTimer) {
-      clearInterval(intervaloTimer);
-      intervaloTimer = null;
-    }
-  } else {
-    if (aviso) aviso.textContent = "Leia com calma. As alternativas serão liberadas após 1 minuto.";
-  }
-}
-
-function iniciarTimerQuestao(questao) {
-  if (intervaloTimer) clearInterval(intervaloTimer);
-  const restante = segundosRestantesQuestao(questao);
-  atualizarTimerVisual(questao.id);
-
-  if (restante > 0 && respostas[questao.id] === undefined) {
-    intervaloTimer = setInterval(() => atualizarTimerVisual(questao.id), 1000);
-  }
+  telaInicial.classList.add("escondido");
+  telaResultado.classList.add("escondido");
+  telaQuiz.classList.remove("escondido");
+  atualizarPlacar();
+  renderizarQuestao();
 }
 
 function renderizarQuestao() {
-  if (intervaloTimer) {
-    clearInterval(intervaloTimer);
-    intervaloTimer = null;
-  }
+  const questao = estado.questoes[estado.indice];
+  estado.travada = false;
+  btnProxima.disabled = true;
+  feedback.className = "feedback escondido";
+  feedback.innerHTML = "";
 
-  if (!idsAtuais.length) {
-    document.getElementById("areaQuestao").innerHTML = `
-      <div class="alerta">
-        Nenhuma questão encontrada para este modo. Tente selecionar outro tópico ou limpar a tentativa.
-      </div>`;
-    return;
-  }
+  topicoAtual.textContent = questao.topico;
+  dificuldadeAtual.textContent = nomeDificuldade(questao.dificuldade);
+  contador.textContent = `Questão ${estado.indice + 1} de ${estado.questoes.length}`;
+  barraProgresso.style.width = `${(estado.indice / estado.questoes.length) * 100}%`;
+  enunciado.textContent = questao.enunciado;
 
-  const questao = obterQuestaoAtual();
-  const resposta = respostas[questao.id];
-  const temResposta = resposta !== undefined;
-  const restante = segundosRestantesQuestao(questao);
-  const bloqueada = !temResposta && restante > 0;
-
-  const alternativas = questao.opcoes.map((opcao, index) => {
-    let classe = "alternativa";
-    if (bloqueada) classe += " bloqueada";
-    if (temResposta) {
-      if (index === questao.correta) classe += " correta";
-      if (index === resposta && index !== questao.correta) classe += " errada";
-    }
-
-    const disabled = bloqueada || temResposta ? "disabled" : "";
-
-    return `
-      <button class="${classe}" data-indice="${index}" ${disabled}>
-        <span class="letra">${letras[index]}</span>
-        <span>${opcao}</span>
-      </button>`;
-  }).join("");
-
-  let feedback = "";
-  if (temResposta) {
-    const acertou = resposta === questao.correta;
-    feedback = `
-      <div class="feedback ${acertou ? "certo" : "errado"}">
-        <strong>${acertou ? "✅ Correto!" : "❌ Ainda não."}</strong>
-        <p>${acertou ? "Você marcou a alternativa certa." : `A resposta correta é: <strong>${questao.opcoes[questao.correta]}</strong>.`} ${questao.explicacao}</p>
-      </div>`;
-  }
-
-  document.getElementById("areaQuestao").innerHTML = `
-    <div class="questao-cabecalho">
-      <span class="topico-tag">${questao.topico}</span>
-      <span class="numero-questao">Questão ${questao.id}</span>
-    </div>
-
-    <div class="temporizador ${temResposta ? "respondida" : bloqueada ? "aguardando" : "liberada"}">
-      <div>
-        <strong>Tempo mínimo de leitura</strong>
-        <p id="avisoTempoQuestao">${temResposta ? "Questão já respondida." : bloqueada ? "Leia com calma. As alternativas serão liberadas após 1 minuto." : "Agora você pode marcar uma alternativa."}</p>
-      </div>
-      <span id="tempoQuestao">${formatarTempo(restante)}</span>
-    </div>
-
-    <p class="enunciado">${questao.enunciado}</p>
-    <div class="alternativas">${alternativas}</div>
-    ${feedback}
-  `;
-
-  document.querySelectorAll(".alternativa").forEach((botao) => {
-    botao.addEventListener("click", () => marcarResposta(Number(botao.dataset.indice)));
+  alternativasEl.innerHTML = "";
+  questao.alternativas.forEach((alternativa, indice) => {
+    const botao = document.createElement("button");
+    botao.className = "alternativa";
+    botao.type = "button";
+    botao.innerHTML = `<span class="letra">${letras[indice]}</span><span>${alternativa.texto}</span>`;
+    botao.addEventListener("click", () => responder(indice, botao));
+    alternativasEl.appendChild(botao);
   });
-
-  document.getElementById("btnAnterior").disabled = indiceAtual === 0;
-  document.getElementById("btnProxima").disabled = indiceAtual === idsAtuais.length - 1;
-
-  iniciarTimerQuestao(questao);
-  atualizarProgresso();
-  atualizarTopo();
 }
 
-function marcarResposta(indice) {
-  const questao = obterQuestaoAtual();
-  if (!questao) return;
+function responder(indiceEscolhido, botaoEscolhido) {
+  if (estado.travada) return;
 
-  const restante = segundosRestantesQuestao(questao);
-  if (restante > 0) {
-    alert(`Aguarde ${formatarTempo(restante)} para responder. Aproveite para ler o enunciado com atenção.`);
-    return;
+  const questao = estado.questoes[estado.indice];
+  const acertou = questao.alternativas[indiceEscolhido].correta;
+  estado.travada = true;
+
+  const botoes = [...document.querySelectorAll(".alternativa")];
+  botoes.forEach((botao, indice) => {
+    botao.disabled = true;
+    if (questao.alternativas[indice].correta) botao.classList.add("correta");
+  });
+
+  if (acertou) {
+    estado.acertos++;
+    estado.pontuacao += pontosPorDificuldade(questao.dificuldade);
+    estado.estatisticas[questao.topico].acertos++;
+    botaoEscolhido.classList.add("correta");
+    feedback.className = "feedback ok";
+    feedback.innerHTML = `<strong>Parabéns! Resposta correta.</strong>${questao.explicacao}`;
+    tocarSomVitoria();
+    soltarFogos();
+    animarPontuacao();
+  } else {
+    estado.erros++;
+    estado.estatisticas[questao.topico].erros++;
+    botaoEscolhido.classList.add("errada");
+    const correta = questao.alternativas.find(item => item.correta).texto;
+    feedback.className = "feedback erro";
+    feedback.innerHTML = `<strong>Ops! A resposta correta era: ${correta}</strong>${questao.explicacao}`;
+    tocarSomErro();
   }
 
-  if (respostas[questao.id] !== undefined) return;
+  estado.respostas.push({
+    id: questao.id,
+    topico: questao.topico,
+    assunto: questao.assunto,
+    enunciado: questao.enunciado,
+    escolha: questao.alternativas[indiceEscolhido].texto,
+    correta: questao.alternativas.find(item => item.correta).texto,
+    acertou,
+    explicacao: questao.explicacao
+  });
 
-  respostas[questao.id] = indice;
-  salvarRespostas();
+  atualizarPlacar();
+  btnProxima.disabled = false;
+  if (estado.indice === estado.questoes.length - 1) {
+    btnProxima.textContent = "Ver resultado";
+  } else {
+    btnProxima.textContent = "Próxima questão";
+  }
+}
+
+function proximaQuestao() {
+  if (estado.indice >= estado.questoes.length - 1) {
+    mostrarResultado();
+    return;
+  }
+  estado.indice++;
   renderizarQuestao();
 }
 
-function mostrarDashboard() {
-  if (intervaloTimer) {
-    clearInterval(intervaloTimer);
-    intervaloTimer = null;
-  }
+function mostrarResultado() {
+  telaQuiz.classList.add("escondido");
+  telaResultado.classList.remove("escondido");
+  barraProgresso.style.width = "100%";
 
-  document.body.classList.remove("modo-questoes");
-  document.getElementById("telaDashboard").classList.remove("oculto");
-  document.getElementById("telaQuestoes").classList.add("oculto");
-  atualizarTopo();
-}
+  const totalRespondidas = estado.acertos + estado.erros;
+  const percentual = totalRespondidas ? Math.round((estado.acertos / totalRespondidas) * 100) : 0;
 
-function mostrarQuestoes() {
-  document.body.classList.add("modo-questoes");
-  document.getElementById("telaDashboard").classList.add("oculto");
-  document.getElementById("telaQuestoes").classList.remove("oculto");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function iniciarQuestoesSelecionadas() {
-  const topico = document.getElementById("filtroTopico").value;
-  selecionarTopico(topico, true);
-}
-
-function selecionarModoTodos(entrar = false) {
-  modoAtual = "todos";
-  idsAtuais = bancoQuestoes.map((q) => q.id);
-  indiceAtual = 0;
-
-  const filtro = document.getElementById("filtroTopico");
-  if (filtro) filtro.value = "todos";
-
-  document.getElementById("areaResultado").classList.add("oculto");
-  atualizarTopo();
-  atualizarProgresso();
-
-  if (entrar) {
-    mostrarQuestoes();
-    renderizarQuestao();
-  }
-}
-
-function selecionarTopico(topico, entrar = false) {
-  modoAtual = topico;
-  idsAtuais = topico === "todos"
-    ? bancoQuestoes.map((q) => q.id)
-    : bancoQuestoes.filter((q) => q.topico === topico).map((q) => q.id);
-  indiceAtual = 0;
-
-  const filtro = document.getElementById("filtroTopico");
-  if (filtro && Array.from(filtro.options).some((opcao) => opcao.value === topico)) {
-    filtro.value = topico;
-  }
-
-  document.getElementById("areaResultado").classList.add("oculto");
-  atualizarTopo();
-  atualizarProgresso();
-
-  if (entrar || !document.getElementById("telaQuestoes").classList.contains("oculto")) {
-    mostrarQuestoes();
-    renderizarQuestao();
-  }
-}
-
-function obterIdsComErro(topico = null) {
-  return bancoQuestoes
-    .filter((questao) => !topico || questao.topico === topico)
-    .filter((questao) => respostas[questao.id] !== undefined && respostas[questao.id] !== questao.correta)
-    .map((questao) => questao.id);
-}
-
-function reiniciarQuestoes(ids) {
-  ids.forEach((id) => {
-    delete respostas[id];
-    delete iniciosQuestoes[id];
-  });
-  salvarRespostas();
-  salvarInicios();
-}
-
-function refazerErros(topico = null) {
-  const ids = obterIdsComErro(topico);
-  if (!ids.length) {
-    alert("Não há erros respondidos para refazer nesse tópico. Muito bem!");
-    return;
-  }
-
-  reiniciarQuestoes(ids);
-  modoAtual = topico ? `Erros: ${topico}` : "Erros gerais";
-  idsAtuais = ids;
-  indiceAtual = 0;
-  document.getElementById("areaResultado").classList.add("oculto");
-  mostrarQuestoes();
-  renderizarQuestao();
-}
-
-function textoNivel(percentual) {
-  if (percentual >= 90) return "Excelente";
-  if (percentual >= 70) return "Muito bom";
-  if (percentual >= 50) return "Em desenvolvimento";
-  return "Precisa revisar";
-}
-
-function renderizarRanking() {
-  const lista = [...ranking]
-    .sort((a, b) => b.acertos - a.acertos || b.percentual - a.percentual || new Date(b.dataISO) - new Date(a.dataISO))
-    .slice(0, 10);
-
-  if (!lista.length) {
-    return `<div class="ranking-vazio">Nenhum resultado salvo ainda. Finalize a revisão e registre seu nome.</div>`;
-  }
-
-  return `
-    <ol class="ranking-lista">
-      ${lista.map((item, index) => `
-        <li>
-          <span class="ranking-posicao">${index + 1}º</span>
-          <div>
-            <strong>${item.nome}</strong>
-            <small>${item.acertos}/${item.total} acertos • ${item.percentual}% • ${item.data}</small>
-          </div>
-        </li>`).join("")}
-    </ol>`;
-}
-
-function blocoRanking(geral) {
-  if (geral.respondidas < geral.total) {
-    return `
-      <div class="ranking-box bloqueado">
-        <h3>Ranking</h3>
-        <p>O ranking será liberado quando todas as ${geral.total} questões forem respondidas.</p>
-        ${renderizarRanking()}
-      </div>`;
-  }
-
-  return `
-    <div class="ranking-box">
-      <div class="ranking-box__cabecalho">
-        <div>
-          <h3>Finalizar e salvar no ranking</h3>
-          <p>Digite o nome do aluno para registrar esta pontuação.</p>
-        </div>
-        <strong>${textoNivel(geral.percentual)}</strong>
-      </div>
-      <div class="ranking-form">
-        <input id="nomeRanking" type="text" maxlength="40" placeholder="Nome do aluno" aria-label="Nome do aluno para o ranking" />
-        <button id="btnSalvarRanking" class="btn btn-primario">Salvar no ranking</button>
-      </div>
-      <div id="mensagemRanking" class="mensagem-ranking" aria-live="polite"></div>
-      ${renderizarRanking()}
-    </div>`;
-}
-
-function renderizarResultado() {
-  mostrarDashboard();
-  const geral = calcularResumo();
-  const area = document.getElementById("areaResultado");
-
-  const cardsTopicos = TOPICOS.map((topico) => {
-    const idsTopico = bancoQuestoes.filter((q) => q.topico === topico).map((q) => q.id);
-    const resumo = calcularResumo(idsTopico);
-    const largura = `${resumo.percentual}%`;
-    const errosTopico = obterIdsComErro(topico).length;
-
-    return `
-      <div class="topico-card">
-        <div class="topico-card__cabecalho">
-          <h3>${topico}</h3>
-          <strong>${resumo.acertos}/${resumo.total}</strong>
-        </div>
-        <p>${resumo.respondidas} respondidas • ${resumo.erros} erro(s) • ${resumo.pendentes} pendente(s)</p>
-        <div class="topico-card__linha"><span style="width:${largura}"></span></div>
-        ${errosTopico > 0 ? `<button class="btn btn-secundario" data-refazer-topico="${topico}">Refazer erros deste tópico</button>` : `<button class="btn btn-neutro" disabled>Sem erros respondidos</button>`}
-      </div>`;
-  }).join("");
-
-  area.innerHTML = `
-    <h2>Resultado da revisão</h2>
-    <p>Confira seu desempenho geral, veja a pontuação por área e refaça os tópicos em que houve erro.</p>
-
-    <div class="resultado__destaque">
-      <div><strong>${geral.total}</strong><span>questões</span></div>
-      <div><strong>${geral.respondidas}</strong><span>respondidas</span></div>
-      <div><strong>${geral.acertos}</strong><span>acertos</span></div>
-      <div><strong>${geral.percentual}%</strong><span>aproveitamento</span></div>
-    </div>
-
-    ${geral.pendentes > 0 ? `<div class="alerta">Ainda há ${geral.pendentes} questão(ões) sem resposta. Para liberar o ranking, responda todas as questões.</div>` : ""}
-    ${geral.erros > 0 ? `<div class="alerta alerta-erro">Você tem ${geral.erros} erro(s) respondido(s). Use os botões de refazer para tentar novamente apenas o que precisa melhorar.</div>` : ""}
-
-    <div class="botoes-controle resultado-botoes">
-      <button id="btnResultadoRefazerErros" class="btn btn-secundario">Refazer todos os erros</button>
-      <button id="btnResultadoTodos" class="btn btn-primario">Voltar para todas as questões</button>
-    </div>
-
-    ${blocoRanking(geral)}
-
-    <div class="grade-topicos">${cardsTopicos}</div>
+  resultadoGeral.innerHTML = `
+    <div class="box"><strong>${estado.pontuacao}</strong><span>pontos</span></div>
+    <div class="box"><strong>${estado.acertos}</strong><span>acertos</span></div>
+    <div class="box"><strong>${estado.erros}</strong><span>erros</span></div>
+    <div class="box"><strong>${percentual}%</strong><span>aproveitamento</span></div>
   `;
 
-  area.classList.remove("oculto");
-  area.scrollIntoView({ behavior: "smooth", block: "start" });
+  const linhas = Object.entries(estado.estatisticas).map(([topico, dados]) => {
+    const aproveitamento = dados.total ? Math.round((dados.acertos / dados.total) * 100) : 0;
+    return `
+      <tr>
+        <td>${topico}</td>
+        <td>${dados.total}</td>
+        <td>${dados.acertos}</td>
+        <td>${dados.erros}</td>
+        <td>${aproveitamento}%</td>
+      </tr>
+    `;
+  }).join("");
 
-  document.getElementById("btnResultadoRefazerErros").addEventListener("click", () => refazerErros());
-  document.getElementById("btnResultadoTodos").addEventListener("click", () => selecionarModoTodos(true));
-  document.querySelectorAll("[data-refazer-topico]").forEach((botao) => {
-    botao.addEventListener("click", () => refazerErros(botao.dataset.refazerTopico));
-  });
+  resumoTopicos.innerHTML = `
+    <h2>Resumo por tópico</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tópico</th>
+          <th>Questões</th>
+          <th>Acertos</th>
+          <th>Erros</th>
+          <th>Aproveitamento</th>
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>
+    </table>
+  `;
 
-  const btnSalvarRanking = document.getElementById("btnSalvarRanking");
-  if (btnSalvarRanking) {
-    btnSalvarRanking.addEventListener("click", () => salvarPontuacaoRanking(geral));
-  }
-}
-
-function salvarPontuacaoRanking(geral) {
-  const input = document.getElementById("nomeRanking");
-  const mensagem = document.getElementById("mensagemRanking");
-  const nome = input.value.trim();
-
-  if (!nome) {
-    mensagem.textContent = "Digite o nome do aluno antes de salvar.";
-    mensagem.className = "mensagem-ranking erro";
-    input.focus();
+  const erros = estado.respostas.filter(item => !item.acertou);
+  if (erros.length === 0) {
+    listaErros.innerHTML = `<h2>Questões para revisar</h2><p>Excelente! Você não errou nenhuma questão nesta rodada.</p>`;
+    soltarFogos();
+    tocarSomVitoria();
     return;
   }
 
-  const agora = new Date();
-  ranking.push({
-    nome,
-    total: geral.total,
-    respondidas: geral.respondidas,
-    acertos: geral.acertos,
-    erros: geral.erros,
-    percentual: geral.percentual,
-    data: agora.toLocaleString("pt-BR"),
-    dataISO: agora.toISOString()
-  });
-  salvarRanking();
-
-  mensagem.textContent = "Pontuação salva no ranking!";
-  mensagem.className = "mensagem-ranking sucesso";
-  input.value = "";
-  renderizarResultado();
+  listaErros.innerHTML = `
+    <h2>Questões para revisar</h2>
+    ${erros.map((item, indice) => `
+      <div class="erro-item">
+        <h3>${indice + 1}. ${item.topico} — ${item.assunto}</h3>
+        <p><strong>Questão:</strong> ${item.enunciado}</p>
+        <p><strong>Sua resposta:</strong> ${item.escolha}</p>
+        <p><strong>Resposta correta:</strong> ${item.correta}</p>
+        <p><strong>Explicação:</strong> ${item.explicacao}</p>
+      </div>
+    `).join("")}
+  `;
 }
 
-function limparTentativa() {
-  const confirmar = confirm("Deseja apagar todas as respostas, tempos de leitura e começar novamente?");
-  if (!confirmar) return;
-
-  respostas = {};
-  iniciosQuestoes = {};
-  salvarRespostas();
-  salvarInicios();
-  document.getElementById("areaResultado").classList.add("oculto");
-  selecionarModoTodos();
+function atualizarPlacar() {
+  pontuacaoEl.textContent = estado.pontuacao;
+  acertosEl.textContent = estado.acertos;
+  errosEl.textContent = estado.erros;
 }
 
-function configurarEventos() {
-  document.getElementById("filtroTopico").addEventListener("change", (evento) => {
-    selecionarTopico(evento.target.value, false);
-  });
+function animarPontuacao() {
+  pontuacaoEl.classList.remove("pulse");
+  void pontuacaoEl.offsetWidth;
+  pontuacaoEl.classList.add("pulse");
+}
 
-  document.getElementById("btnIniciar").addEventListener("click", iniciarQuestoesSelecionadas);
-  document.getElementById("btnIniciarRapido").addEventListener("click", () => selecionarTopico("todos", true));
+function nomeDificuldade(nivel) {
+  if (nivel === 1) return "Fácil";
+  if (nivel === 2) return "Médio";
+  return "Desafio";
+}
 
-  document.getElementById("btnVerRanking").addEventListener("click", () => {
-    renderizarResultado();
-    document.getElementById("areaResultado").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+function pontosPorDificuldade(nivel) {
+  if (nivel === 1) return 10;
+  if (nivel === 2) return 15;
+  return 20;
+}
 
-  document.getElementById("btnVoltarDashboard").addEventListener("click", () => {
-    mostrarDashboard();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
+function embaralhar(lista) {
+  const copia = [...lista];
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia;
+}
 
-  document.getElementById("btnAnterior").addEventListener("click", () => {
-    if (indiceAtual > 0) {
-      indiceAtual--;
-      renderizarQuestao();
+function montarQuestao(id, topico, assunto, dificuldade, enunciado, correta, erradas, explicacao) {
+  const alternativas = embaralhar([
+    { texto: correta, correta: true },
+    ...erradas.map(texto => ({ texto, correta: false }))
+  ]);
+
+  return { id, topico, assunto, dificuldade, enunciado, alternativas, explicacao };
+}
+
+function gerarQuestoes() {
+  const questoes = [];
+  let id = 1;
+
+  const contextoPreHistoria = [
+    "Durante uma visita a um museu, uma turma observou pontas de pedra, ossos trabalhados e desenhos em cavernas.",
+    "Em uma aula de História, estudantes compararam a vida de grupos caçadores-coletores com a de grupos agricultores.",
+    "Ao analisar imagens de pinturas rupestres, a professora pediu que a turma pensasse sobre a vida dos primeiros seres humanos.",
+    "Um grupo de alunos leu um texto sobre o domínio do fogo e as mudanças provocadas por essa descoberta.",
+    "Em um trabalho escolar, uma equipe precisou explicar por que a agricultura transformou a vida humana.",
+    "Ao estudar o período Neolítico, a turma percebeu que algumas comunidades passaram a morar por mais tempo no mesmo lugar.",
+    "Um documentário mostrou que os primeiros seres humanos utilizavam elementos da natureza para fabricar instrumentos.",
+    "Na biblioteca, a turma encontrou um livro que explicava a importância dos fósseis para conhecer o passado.",
+    "Em uma atividade de revisão, os alunos discutiram a diferença entre nomadismo e sedentarização.",
+    "Durante a correção de exercícios, a professora destacou que a Pré-História não significa ausência de cultura."
+  ];
+
+  const modelosPreHistoria = [
+    {
+      assunto: "Fontes históricas",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} Esses materiais podem ser considerados fontes históricas porque`,
+      correta: "ajudam a compreender formas de vida de sociedades do passado.",
+      erradas: ["comprovam que todos os povos viviam do mesmo modo.", "mostram apenas fatos ocorridos depois da escrita.", "servem apenas como objetos de decoração.", "eliminam a necessidade de interpretação dos pesquisadores."],
+      explicacao: "Fontes históricas são vestígios que ajudam a investigar o passado, como objetos, pinturas, fósseis, documentos e construções."
+    },
+    {
+      assunto: "Paleolítico",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} Uma característica comum do modo de vida paleolítico era`,
+      correta: "a prática da caça, da pesca e da coleta de alimentos.",
+      erradas: ["a construção de grandes cidades industriais.", "o uso de moedas em atividades bancárias.", "a produção de alimentos em fábricas.", "a escrita em livros impressos."],
+      explicacao: "No Paleolítico, muitos grupos sobreviviam da caça, pesca e coleta, deslocando-se conforme a disponibilidade de recursos."
+    },
+    {
+      assunto: "Nomadismo",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} Quando um grupo se desloca em busca de alimentos e melhores condições de sobrevivência, esse modo de vida é chamado de`,
+      correta: "nomadismo.",
+      erradas: ["sedentarismo.", "urbanização.", "industrialização.", "monarquia."],
+      explicacao: "Nomadismo é o deslocamento frequente de grupos humanos em busca de recursos, como água, caça, frutos e abrigo."
+    },
+    {
+      assunto: "Domínio do fogo",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} O domínio do fogo foi importante porque permitiu`,
+      correta: "cozinhar alimentos, aquecer o corpo e afastar animais.",
+      erradas: ["criar computadores e redes sociais.", "substituir completamente a agricultura.", "impedir todos os conflitos entre grupos.", "eliminar a necessidade de abrigos."],
+      explicacao: "O fogo trouxe mais proteção, calor e novas formas de preparar alimentos, melhorando as condições de sobrevivência."
+    },
+    {
+      assunto: "Pinturas rupestres",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} As pinturas rupestres são importantes para a História porque`,
+      correta: "registram cenas e símbolos que ajudam a estudar grupos antigos.",
+      erradas: ["são fotografias tiradas por povos antigos.", "foram feitas apenas para vender em museus.", "mostram mapas políticos modernos.", "provam que não havia comunicação na Pré-História."],
+      explicacao: "Pinturas rupestres revelam aspectos de comunicação, crenças, caça e cotidiano de grupos humanos antigos."
+    },
+    {
+      assunto: "Neolítico",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} A chamada Revolução Neolítica está relacionada principalmente`,
+      correta: "ao desenvolvimento da agricultura e da criação de animais.",
+      erradas: ["à invenção da internet.", "ao início das grandes navegações europeias.", "ao desaparecimento de todas as aldeias.", "à criação das primeiras universidades."],
+      explicacao: "A agricultura e a domesticação de animais permitiram maior produção de alimentos e favoreceram a formação de aldeias."
+    },
+    {
+      assunto: "Sedentarização",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} A sedentarização ocorreu quando muitos grupos humanos passaram a`,
+      correta: "fixar moradia em determinados lugares por mais tempo.",
+      erradas: ["abandonar toda forma de cooperação.", "viver exclusivamente em navios.", "usar apenas alimentos industrializados.", "mudar de continente todos os dias."],
+      explicacao: "Com a agricultura, grupos puderam permanecer em áreas férteis, formando aldeias e novas formas de organização."
+    },
+    {
+      assunto: "Divisão de tarefas",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} O aumento da produção de alimentos contribuiu para`,
+      correta: "a ampliação da divisão de tarefas dentro das comunidades.",
+      erradas: ["o fim definitivo do trabalho humano.", "a eliminação de todos os instrumentos.", "a proibição da moradia fixa.", "a extinção imediata da pesca."],
+      explicacao: "Com mais alimentos e comunidades maiores, as tarefas puderam se diversificar, como plantar, cuidar de animais, construir e produzir objetos."
+    },
+    {
+      assunto: "Arqueologia",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} O trabalho do arqueólogo é importante porque`,
+      correta: "estuda vestígios materiais para compreender sociedades antigas.",
+      erradas: ["prevê exatamente o futuro das cidades.", "substitui todas as outras áreas do conhecimento.", "inventa objetos antigos sem investigação.", "analisa apenas notícias de televisão."],
+      explicacao: "A arqueologia investiga objetos, ossos, ferramentas, construções e outros vestígios para interpretar o passado humano."
+    },
+    {
+      assunto: "Mudanças sociais",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} Uma consequência da agricultura para a organização social foi`,
+      correta: "o crescimento das aldeias e o surgimento de novas formas de cooperação e conflito.",
+      erradas: ["o retorno obrigatório de todos os grupos ao nomadismo.", "a impossibilidade de armazenar alimentos.", "a ausência total de liderança em qualquer comunidade.", "o desaparecimento de instrumentos de trabalho."],
+      explicacao: "A produção e o armazenamento de alimentos favoreceram aldeias maiores, divisão de tarefas e disputas por recursos e terras."
     }
+  ];
+
+  contextoPreHistoria.forEach((ctx, indiceContexto) => {
+    modelosPreHistoria.forEach((modelo, indiceModelo) => {
+      questoes.push(montarQuestao(
+        id++,
+        "Pré-História",
+        modelo.assunto,
+        modelo.dificuldade,
+        modelo.pergunta(ctx),
+        modelo.correta,
+        modelo.erradas,
+        modelo.explicacao
+      ));
+    });
   });
 
-  document.getElementById("btnProxima").addEventListener("click", () => {
-    if (indiceAtual < idsAtuais.length - 1) {
-      indiceAtual++;
-      renderizarQuestao();
+  const contextoAmerica = [
+    "Em uma aula sobre o povoamento da América, a professora mostrou um mapa com possíveis rotas migratórias.",
+    "Durante uma atividade, a turma comparou a hipótese da passagem pelo Estreito de Bering com a possibilidade de rotas costeiras.",
+    "Ao estudar sítios arqueológicos brasileiros, os alunos conheceram pesquisas realizadas na Serra da Capivara.",
+    "Um texto didático explicava que diferentes evidências ajudam a entender a chegada dos primeiros grupos humanos à América.",
+    "Em um debate, os estudantes perceberam que a origem do homem americano é tema de investigação científica.",
+    "Uma exposição apresentou instrumentos de pedra, pinturas rupestres e restos de fogueiras encontrados em antigas ocupações humanas.",
+    "Ao observar imagens de sambaquis, a turma discutiu como povos antigos viviam em áreas litorâneas.",
+    "Em uma reportagem escolar, foi citado que descobertas arqueológicas podem mudar interpretações sobre o passado.",
+    "Na revisão, os alunos analisaram por que os primeiros grupos humanos precisavam se adaptar a ambientes diversos.",
+    "Em um mapa da América, a turma localizou áreas frias, florestas, desertos e litorais ocupados por povos antigos."
+  ];
+
+  const modelosAmerica = [
+    {
+      assunto: "Migrações humanas",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} A palavra migração, nesse estudo, indica`,
+      correta: "o deslocamento de grupos humanos de uma região para outra.",
+      erradas: ["a permanência obrigatória no mesmo lugar para sempre.", "a construção de prédios comerciais modernos.", "a troca de dinheiro entre países atuais.", "a criação de mapas por satélite."],
+      explicacao: "Migração é o deslocamento de pessoas ou grupos, muitas vezes em busca de alimento, abrigo e melhores condições de vida."
+    },
+    {
+      assunto: "Estreito de Bering",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} A hipótese de Bering afirma que grupos humanos teriam chegado à América`,
+      correta: "passando por uma área entre a Ásia e a América do Norte em período de baixa do nível do mar.",
+      erradas: ["saindo da América para fundar a Europa medieval.", "viajando em aviões comerciais durante a Pré-História.", "atravessando diretamente o Oceano Atlântico em navios a vapor.", "usando mapas impressos produzidos no século XXI."],
+      explicacao: "Uma das hipóteses mais conhecidas indica deslocamentos pelo norte, na região do Estreito de Bering, durante períodos glaciais."
+    },
+    {
+      assunto: "Evidências arqueológicas",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} Para estudar a presença humana antiga na América, os pesquisadores analisam`,
+      correta: "fósseis, ferramentas, restos de fogueiras, pinturas e outros vestígios.",
+      erradas: ["somente mensagens de celular.", "apenas documentos assinados em cartório.", "unicamente fotografias coloridas atuais.", "somente entrevistas televisionadas."],
+      explicacao: "Como se trata de um passado muito antigo, vestígios materiais são fundamentais para a pesquisa."
+    },
+    {
+      assunto: "Rotas costeiras",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} A hipótese das rotas costeiras sugere que`,
+      correta: "alguns grupos podem ter se deslocado acompanhando litorais e recursos marinhos.",
+      erradas: ["todos os povos americanos surgiram de uma única cidade moderna.", "a agricultura industrial foi a primeira atividade humana.", "os deslocamentos humanos ocorreram apenas por ferrovias.", "não houve adaptação aos ambientes naturais."],
+      explicacao: "Além da rota pelo norte, há hipóteses que consideram deslocamentos por áreas costeiras, aproveitando recursos do mar."
+    },
+    {
+      assunto: "Serra da Capivara",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} A Serra da Capivara, no Piauí, é importante porque`,
+      correta: "possui sítios arqueológicos com pinturas e vestígios de ocupações antigas.",
+      erradas: ["é uma fábrica de equipamentos eletrônicos.", "foi criada apenas para turismo de praias.", "tem somente prédios coloniais sem vestígios antigos.", "prova que não existiam povos antigos no Brasil."],
+      explicacao: "A região da Serra da Capivara é conhecida por sítios arqueológicos, pinturas rupestres e pesquisas sobre antigas ocupações humanas."
+    },
+    {
+      assunto: "Sambaquis",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} Os sambaquis indicam principalmente`,
+      correta: "vestígios de povos que viveram em áreas próximas ao litoral e consumiam recursos marinhos.",
+      erradas: ["restos de castelos medievais europeus.", "máquinas agrícolas do século XX.", "apenas lixeiras urbanas recentes.", "documentos digitais do período colonial."],
+      explicacao: "Sambaquis são montes formados por conchas, ossos e outros vestígios, importantes para estudar povos antigos do litoral."
+    },
+    {
+      assunto: "Diversidade cultural",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} A ocupação de ambientes diferentes na América mostra que`,
+      correta: "os grupos humanos desenvolveram modos de vida variados.",
+      erradas: ["todos os povos tinham exatamente as mesmas roupas, línguas e casas.", "a natureza não influenciava nenhuma atividade humana.", "as sociedades antigas não criavam técnicas.", "as pessoas viviam somente em um único clima."],
+      explicacao: "A diversidade de ambientes contribuiu para diferentes formas de moradia, alimentação, trabalho e cultura."
+    },
+    {
+      assunto: "Ciência e hipóteses",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} Quando novas descobertas arqueológicas aparecem, é correto afirmar que`,
+      correta: "as hipóteses científicas podem ser revistas com base em novas evidências.",
+      erradas: ["toda pesquisa antiga deve ser ignorada sem análise.", "a ciência nunca muda suas explicações.", "os vestígios deixam de ter valor para a História.", "a opinião sem prova passa a valer mais que a pesquisa."],
+      explicacao: "O conhecimento científico é construído com evidências e pode ser aperfeiçoado quando novas informações são encontradas."
+    },
+    {
+      assunto: "Adaptação ao ambiente",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} A adaptação dos primeiros grupos humanos aos ambientes americanos envolveu`,
+      correta: "uso de recursos locais, criação de instrumentos e formas de organização do grupo.",
+      erradas: ["dependência de supermercados e energia elétrica.", "abandono de qualquer técnica de sobrevivência.", "uso exclusivo de produtos industrializados.", "proibição de aprender com a natureza."],
+      explicacao: "Os grupos humanos criaram soluções para sobreviver em diferentes ambientes, usando recursos disponíveis e conhecimentos coletivos."
+    },
+    {
+      assunto: "Povoamento da América",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} Sobre o povoamento da América, a conclusão mais adequada é que`,
+      correta: "existem diferentes hipóteses e evidências, por isso o tema continua sendo estudado.",
+      erradas: ["não há qualquer vestígio sobre povos antigos.", "apenas uma resposta simples explica todos os casos.", "o assunto pertence somente à Geografia econômica atual.", "as pesquisas arqueológicas não têm relação com a História."],
+      explicacao: "O povoamento americano é estudado por meio de hipóteses, mapas, vestígios e comparações entre diferentes descobertas."
     }
+  ];
+
+  contextoAmerica.forEach((ctx) => {
+    modelosAmerica.forEach((modelo) => {
+      questoes.push(montarQuestao(
+        id++,
+        "Origens do homem americano",
+        modelo.assunto,
+        modelo.dificuldade,
+        modelo.pergunta(ctx),
+        modelo.correta,
+        modelo.erradas,
+        modelo.explicacao
+      ));
+    });
   });
 
-  document.getElementById("btnResultado").addEventListener("click", renderizarResultado);
-  document.getElementById("btnResultadoQuestao").addEventListener("click", renderizarResultado);
-  document.getElementById("btnRefazerErros").addEventListener("click", () => refazerErros());
-  document.getElementById("btnLimpar").addEventListener("click", limparTentativa);
+  const contextoGeografia = [
+    "Em uma aula de Geografia, a professora pediu que os estudantes observassem o bairro onde vivem.",
+    "Ao analisar um mapa do Brasil, a turma comparou áreas com características naturais, econômicas e culturais diferentes.",
+    "Durante um passeio pela cidade, os alunos perceberam praças, ruas, escolas, comércios e rios modificados pela ação humana.",
+    "Em uma atividade, a turma discutiu por que uma escola pode ser considerada um lugar importante para os estudantes.",
+    "Ao estudar fronteiras, os alunos observaram que alguns espaços são organizados por regras e relações de poder.",
+    "Um texto explicava que a paisagem pode revelar elementos naturais e elementos construídos pelas pessoas.",
+    "Em um debate sobre pertencimento, vários alunos falaram sobre memórias relacionadas à rua, à casa e à escola.",
+    "Na leitura de um mapa regional, a professora explicou que as regiões são recortes usados para facilitar estudos.",
+    "Durante a revisão, os estudantes diferenciaram espaço geográfico, lugar, território, região e paisagem.",
+    "Ao observar imagens de uma feira, de uma aldeia e de um centro comercial, a turma comparou diferentes formas de uso do espaço."
+  ];
+
+  const modelosGeo = [
+    {
+      assunto: "Lugar",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} Em Geografia, o conceito de lugar está ligado principalmente`,
+      correta: "às relações de vivência, identidade e pertencimento das pessoas com o espaço.",
+      erradas: ["apenas a qualquer ponto sem significado para ninguém.", "somente aos países mais ricos do mundo.", "exclusivamente a áreas sem moradores.", "apenas aos mapas de satélite."],
+      explicacao: "Lugar é o espaço vivido, onde as pessoas constroem experiências, lembranças e vínculos."
+    },
+    {
+      assunto: "Paisagem",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} A paisagem pode ser entendida como`,
+      correta: "aquilo que percebemos no espaço, incluindo elementos naturais e humanizados.",
+      erradas: ["somente o que está escondido debaixo da terra.", "apenas os limites políticos entre países.", "um documento sem relação com o espaço.", "uma regra de comportamento escolar."],
+      explicacao: "Paisagem é o conjunto de elementos visíveis e percebidos, como rios, prédios, ruas, vegetação e relevo."
+    },
+    {
+      assunto: "Espaço geográfico",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} O espaço geográfico é formado`,
+      correta: "pela relação entre natureza e ações humanas ao longo do tempo.",
+      erradas: ["apenas por áreas que nunca foram modificadas.", "somente por desenhos feitos em cadernos.", "exclusivamente por planetas distantes.", "apenas por lugares sem população."],
+      explicacao: "O espaço geográfico resulta das transformações feitas pelas sociedades na natureza e das formas de organização da vida humana."
+    },
+    {
+      assunto: "Região",
+      dificuldade: 1,
+      pergunta: ctx => `${ctx} Uma região pode ser definida como`,
+      correta: "uma área delimitada para estudo por possuir critérios ou características comuns.",
+      erradas: ["um espaço que não pode ser representado em mapas.", "um lugar sem nenhuma característica própria.", "uma pessoa que mora no campo.", "um objeto utilizado para medir temperatura."],
+      explicacao: "Região é um recorte do espaço usado para organizar estudos, considerando critérios como clima, economia, cultura ou política."
+    },
+    {
+      assunto: "Território",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} O conceito de território envolve`,
+      correta: "controle, limites, regras e relações de poder sobre um espaço.",
+      erradas: ["somente as lembranças pessoais de uma criança.", "apenas a cor predominante de uma paisagem.", "um espaço sem qualquer disputa ou regra.", "exclusivamente fenômenos astronômicos."],
+      explicacao: "Território é um espaço apropriado ou controlado por pessoas, grupos, instituições ou Estados."
+    },
+    {
+      assunto: "Fronteiras e limites",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} As fronteiras e os limites são importantes porque`,
+      correta: "ajudam a indicar áreas de controle, administração e pertencimento territorial.",
+      erradas: ["impedem qualquer relação entre povos vizinhos.", "existem apenas em desenhos infantis.", "não têm relação com organização do espaço.", "servem apenas para separar elementos naturais de mapas antigos."],
+      explicacao: "Fronteiras e limites organizam territórios, mas também podem ser áreas de contato, troca e conflito."
+    },
+    {
+      assunto: "Paisagem humanizada",
+      dificuldade: 2,
+      pergunta: ctx => `${ctx} Quando observamos ruas, casas, pontes e escolas, estamos vendo elementos`,
+      correta: "humanizados, pois foram construídos ou modificados pela ação humana.",
+      erradas: ["naturais, pois surgiram sem intervenção humana.", "invisíveis, pois não fazem parte da paisagem.", "astronômicos, pois pertencem ao espaço sideral.", "imaginários, pois não podem ser estudados."],
+      explicacao: "Elementos humanizados são aqueles criados ou transformados pelas sociedades, como construções, plantações, estradas e cidades."
+    },
+    {
+      assunto: "Critérios regionais",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} Ao dividir um país em regiões, é necessário escolher critérios porque`,
+      correta: "a regionalização depende do objetivo do estudo e das características analisadas.",
+      erradas: ["todas as regiões são iguais em qualquer mapa.", "os mapas não representam informações sobre o espaço.", "a Geografia não usa comparação entre áreas.", "as regiões são sempre naturais e nunca sociais."],
+      explicacao: "Uma regionalização pode usar critérios físicos, econômicos, culturais, políticos ou sociais, conforme o objetivo da análise."
+    },
+    {
+      assunto: "Território e poder",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} Um exemplo de território no cotidiano é`,
+      correta: "uma escola com regras de uso, direção, salas e espaços organizados.",
+      erradas: ["uma nuvem sem relação com qualquer grupo social.", "um pensamento que não se relaciona ao espaço.", "uma cor escolhida para pintar um desenho.", "um sonho sem localização ou controle."],
+      explicacao: "Mesmo em escalas menores, como uma escola, existem espaços organizados por regras, autoridade e usos definidos."
+    },
+    {
+      assunto: "Comparação de conceitos",
+      dificuldade: 3,
+      pergunta: ctx => `${ctx} A diferença mais adequada entre lugar e território é que`,
+      correta: "lugar destaca vivência e identidade; território destaca controle, poder e limites.",
+      erradas: ["lugar e território significam exatamente a mesma coisa.", "território trata apenas de sentimentos, e lugar apenas de fronteiras políticas.", "nenhum dos dois conceitos é usado pela Geografia.", "lugar é sempre maior que território."],
+      explicacao: "Lugar se relaciona ao espaço vivido; território se relaciona à apropriação, controle e poder sobre o espaço."
+    }
+  ];
+
+  contextoGeografia.forEach((ctx) => {
+    modelosGeo.forEach((modelo) => {
+      questoes.push(montarQuestao(
+        id++,
+        "Região, território e lugar",
+        modelo.assunto,
+        modelo.dificuldade,
+        modelo.pergunta(ctx),
+        modelo.correta,
+        modelo.erradas,
+        modelo.explicacao
+      ));
+    });
+  });
+
+  return questoes;
 }
 
-function iniciarApp() {
-  montarQuestoes();
-  preencherFiltro();
-  configurarEventos();
-  selecionarModoTodos();
-
-  console.log(`Banco de questões carregado: ${bancoQuestoes.length} questões.`);
+function criarAudioContext() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return null;
+  return new AudioContext();
 }
 
-iniciarApp();
+function tocarNota(ctx, frequencia, inicio, duracao, tipo = "sine", volume = 0.08) {
+  const oscilador = ctx.createOscillator();
+  const ganho = ctx.createGain();
+  oscilador.type = tipo;
+  oscilador.frequency.setValueAtTime(frequencia, ctx.currentTime + inicio);
+  ganho.gain.setValueAtTime(0.0001, ctx.currentTime + inicio);
+  ganho.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + inicio + 0.02);
+  ganho.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + inicio + duracao);
+  oscilador.connect(ganho);
+  ganho.connect(ctx.destination);
+  oscilador.start(ctx.currentTime + inicio);
+  oscilador.stop(ctx.currentTime + inicio + duracao + 0.02);
+}
+
+function tocarSomVitoria() {
+  const ctx = criarAudioContext();
+  if (!ctx) return;
+  [523.25, 659.25, 783.99, 1046.5].forEach((freq, indice) => tocarNota(ctx, freq, indice * 0.09, 0.16, "triangle", 0.08));
+}
+
+function tocarSomErro() {
+  const ctx = criarAudioContext();
+  if (!ctx) return;
+  tocarNota(ctx, 220, 0, 0.22, "sawtooth", 0.05);
+  tocarNota(ctx, 164.81, 0.18, 0.32, "sawtooth", 0.05);
+}
+
+const canvas = document.getElementById("fogos");
+const contextoCanvas = canvas.getContext("2d");
+let particulas = [];
+
+function ajustarCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+window.addEventListener("resize", ajustarCanvas);
+ajustarCanvas();
+
+function soltarFogos() {
+  const centroX = Math.random() * canvas.width * 0.6 + canvas.width * 0.2;
+  const centroY = Math.random() * canvas.height * 0.35 + canvas.height * 0.15;
+  for (let i = 0; i < 85; i++) {
+    const angulo = Math.random() * Math.PI * 2;
+    const velocidade = Math.random() * 5 + 2;
+    particulas.push({
+      x: centroX,
+      y: centroY,
+      vx: Math.cos(angulo) * velocidade,
+      vy: Math.sin(angulo) * velocidade,
+      vida: 70,
+      tamanho: Math.random() * 4 + 2,
+      cor: `hsl(${Math.floor(Math.random() * 360)}, 90%, 58%)`
+    });
+  }
+}
+
+function animarFogos() {
+  contextoCanvas.clearRect(0, 0, canvas.width, canvas.height);
+  particulas.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.06;
+    p.vida--;
+    contextoCanvas.globalAlpha = Math.max(p.vida / 70, 0);
+    contextoCanvas.fillStyle = p.cor;
+    contextoCanvas.beginPath();
+    contextoCanvas.arc(p.x, p.y, p.tamanho, 0, Math.PI * 2);
+    contextoCanvas.fill();
+  });
+  contextoCanvas.globalAlpha = 1;
+  particulas = particulas.filter(p => p.vida > 0);
+  requestAnimationFrame(animarFogos);
+}
+
+animarFogos();
