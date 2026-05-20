@@ -12,29 +12,30 @@
   <main class="container">
     <section id="telaInicial" class="card hero">
       <span class="etiqueta">Revisão 6º ano</span>
-      <h1>Quiz de História e Geografia</h1>
+      <h1>Quiz de Geografia e Física</h1>
       <p class="subtitulo">
-        Sistema web com 300 questões autorais, em formato contextualizado inspirado no ENEM,
-        adaptadas para o nível do 6º ano.
+        Questões contextualizadas, no estilo do ENEM, adaptadas para o nível do 6º ano.
+        Conteúdos: Universo, Sistema Solar e Terra; Física dos movimentos; Cinemática e tipos de movimento.
       </p>
 
       <div class="painel-config">
         <div class="campo">
           <label for="quantidade">Quantidade de questões</label>
           <select id="quantidade">
-            <option value="30">Revisão rápida - 30 questões</option>
-            <option value="60">Revisão média - 60 questões</option>
-            <option value="100">Revisão por rodada - 100 questões</option>
-            <option value="300" selected>Revisão completa - 300 questões</option>
+            <option value="20">Revisão rápida - 20 questões</option>
+            <option value="30" selected>Revisão média - 30 questões</option>
+            <option value="60">Revisão ampliada - 60 questões</option>
+            <option value="100">Revisão intensa - 100 questões</option>
+            <option value="300">Banco completo - 300 questões</option>
           </select>
         </div>
 
         <div class="campo">
           <label>Assuntos</label>
           <div class="checkboxes">
-            <label><input type="checkbox" class="filtro-topico" value="Pré-História" checked> Pré-História</label>
-            <label><input type="checkbox" class="filtro-topico" value="Origens do homem americano" checked> Origens do homem americano</label>
-            <label><input type="checkbox" class="filtro-topico" value="Região, território e lugar" checked> Região, território e lugar</label>
+            <label><input type="checkbox" class="filtro-topico" value="Geografia: Universo, Sistema Solar e Terra" checked> Geografia: Universo, Sistema Solar e Terra</label>
+            <label><input type="checkbox" class="filtro-topico" value="Física: Física dos movimentos" checked> Física: Física dos movimentos</label>
+            <label><input type="checkbox" class="filtro-topico" value="Física: Cinemática e tipos de movimento" checked> Física: Cinemática e tipos de movimento</label>
           </div>
         </div>
       </div>
@@ -42,12 +43,13 @@
       <div class="resumo-banco">
         <div><strong id="totalBanco">300</strong><span>questões no banco</span></div>
         <div><strong>3</strong><span>assuntos</span></div>
-        <div><strong>+10/+15/+20</strong><span>pontos por nível</span></div>
+        <div><strong>20s</strong><span>para ler o comentário</span></div>
       </div>
 
       <button id="btnIniciar" class="btn principal">Iniciar quiz</button>
       <p class="aviso">
-        Após marcar uma alternativa, a resposta fica travada. No final, aparece um resumo de acertos e erros por tópico.
+        Depois de iniciar, não há botão de voltar para questões anteriores. Ao marcar uma alternativa,
+        o sistema mostra se está certa ou errada, explica a resposta e libera a próxima questão somente após 20 segundos.
       </p>
     </section>
 
@@ -67,18 +69,18 @@
       <div class="progresso-wrap" aria-label="Progresso do quiz">
         <div id="barraProgresso" class="barra-progresso"></div>
       </div>
-      <p id="contador" class="contador">Questão 1 de 300</p>
+      <p id="contador" class="contador">Questão 1 de 30</p>
 
       <article id="cartaoQuestao" class="cartao-questao">
         <h2 id="enunciado">Carregando questão...</h2>
         <div id="alternativas" class="alternativas"></div>
       </article>
 
-      <div id="feedback" class="feedback escondido" role="status"></div>
+      <div id="feedback" class="feedback escondido" role="status" aria-live="polite"></div>
 
       <div class="acoes">
         <button id="btnProxima" class="btn secundario" disabled>Próxima questão</button>
-        <button id="btnFinalizar" class="btn fantasma">Finalizar agora</button>
+        <button id="btnFinalizar" class="btn principal escondido" disabled>Finalizar quiz</button>
       </div>
     </section>
 
