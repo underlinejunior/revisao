@@ -1,5 +1,5 @@
 const letras = ["A", "B", "C", "D", "E"];
-const TEMPO_COMENTARIO = 20;
+const TEMPO_COMENTARIO = 10;
 
 const estado = {
   questoes: [],
